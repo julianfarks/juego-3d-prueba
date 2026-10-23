@@ -25,7 +25,8 @@ const BUFF_TIME := {"dmg": 4.0, "haste": 3.0, "speed": 3.0, "armor": 4.0, "crit"
 ## Condiciones de daño (nombre -> descripción corta). La evaluación está en cond_met().
 const CONDS := ["burning", "slowed", "frozen", "marked", "full", "wounded", "elite", "far", "near", "crowd", "alone", "lowhp", "fullhp",
 	"shield", "barrier", "hasted", "moving", "still", "air", "streak", "combo", "energy", "rich", "boss_arena"]
-const SOURCES := ["slam", "docs", "echo", "boomerang", "nova", "crit_explosion", "chain", "thorns", "trail", "seal", "barrier"]
+const SOURCES := ["slam", "docs", "echo", "boomerang", "nova", "crit_explosion", "chain", "thorns", "trail", "seal", "barrier", "case", "firework", "frag"]
+const CASE_SRCS := ["case"]
 
 static var buffs: Dictionary = {}           # nombre -> {"t": segundos restantes, "v": valor}
 static var _icd: Dictionary = {}            # "evento:efecto" -> segundos hasta poder volver a disparar
@@ -251,5 +252,7 @@ static func damage_bonus(enemy: Node3D, opts: Dictionary) -> float:
 	var src: String = String(opts.get("src", ""))
 	if src != "":
 		pct += float(b.srcs.get(src, 0.0))
+		if CASE_SRCS.has(src):                       # el maletín lanzado hereda las mejoras del antiguo golpe y del bumerán
+			pct += float(b.srcs.get("slam", 0.0)) + float(b.srcs.get("boomerang", 0.0))
 	pct += buff("dmg")
 	return pct

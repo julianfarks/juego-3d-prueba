@@ -2,10 +2,10 @@ class_name Skills
 extends Node
 ## Habilidades del abogado. Cada una tiene comportamiento, alcance, enfriamiento,
 ## coste de recurso (Expediente) y efectos propios, modificados por las mejoras (Build).
-##   slot 0  Golpe de Maletín      (primaria, cono + onda, auto-apuntado)
+##   slot 0  Lanzamiento de Maletín (primaria: bumerán 3D, ver CaseThrow)
 ##   slot 1  Documentos Teledirigidos (proyectiles que persiguen)
-##   slot 2  Sello Mágico          (zonas en el suelo: daño continuo + ralentización)
-##   slot 3  Objeción              (escudo + onda de choque de control de multitudes)
+##   slot 2  Sello Mágico          (automático: se deposita al final de la ida del maletín)
+##   slot 3  Objeción              (automática: escudo + onda al estar herido)
 
 signal cooldown_fired(slot: int)
 signal denied(slot: int, reason: String)
@@ -68,6 +68,8 @@ func reset() -> void:
 	barrier_t = 0.0
 	barrier_active = false
 	_pending.clear()
+	if GameState.case_throw != null:
+		GameState.case_throw.clear_all()            # el lanzamiento diferido (_pending) se acaba de borrar: nada debe quedar a medias
 	for z in _zones:
 		if z.get("fx") != null and GameState.fx != null:
 			GameState.fx.cancel(z["fx"])
@@ -185,6 +187,7 @@ func update(delta: float) -> void:
 		i2 -= 1
 	_update_zones(delta)
 	_update_barrier(delta)
+	_auto_barrier_check()
 
 
 # ------------------------------------------------------------------ lanzar
@@ -196,8 +199,7 @@ func try_cast(slot: int) -> bool:
 	match slot:
 		0: return _cast_slam()
 		1: return _cast_docs()
-		2: return _cast_seal()
-		3: return _cast_barrier()
+		2, 3: return false          # SELLO y OBJECIÓN ya no son botones: se activan solos
 	return false
 
 
@@ -234,88 +236,56 @@ func _wp(key: String, default_value: float) -> float:
 	return float(wp.get(key, default_value))
 
 
+## ATACAR: lanza el maletín como un bumerán (ver CaseThrow). Ya no hay golpe cuerpo a cuerpo.
 func _cast_slam() -> bool:
+	var ct = GameState.case_throw
+	if ct == null or not ct.can_throw():
+		return false                       # el maletín aún no ha vuelto a la mano: no hay lanzamientos infinitos
 	var amult := attack_speed_mult()
 	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0) * (1.0 - minf(GameState.build.s("cd_slam"), 0.5))
 	cd[0] = cd_max[0]  # update() lo descuenta más rápido cuanta más velocidad de ataque haya
-	var dir := aim_dir()
+	var dir := aim_dir(float(ct.make_profile()["range"]))
 	player.face_dir(dir, 0.4)
-	var dur := clampf(cd_max[0] / amult * 0.95, 0.25, 0.6)
-	player.rig.play("slam", dur)
-	AudioManager.sfx("swing", -4.0, 0.1)
-	var strike_t := dur * 0.55
+	var dur := clampf(cd_max[0] / amult * 0.6, 0.18, 0.4)
+	player.rig.play("throw", dur)
 	var is_mega := takeover_ready
 	if is_mega:
 		takeover_ready = false
 		takeover_t = 12.0
-	_after(strike_t, func(): _slam_hit(dir, is_mega))
+	ct.mark_pending(true)
+	# el maletín sale de la mano en el instante del latigazo de la animación
+	_after(dur * 0.4, func():
+		ct.mark_pending(false)
+		if player.alive:
+			ct.throw_case(dir, is_mega))
 	cooldown_fired.emit(0)
 	return true
 
 
-func _slam_hit(dir: Vector3, mega: bool) -> void:
-	if not player.alive:
+## Sello Mágico automático: ya no tiene botón; se deposita en el punto más lejano del recorrido del maletín.
+func auto_seal(pos: Vector3) -> void:
+	if cd[2] > 0.0 or not player.alive:
 		return
 	var b: Build = GameState.build
-	var base: float = float(Config.SKILLS["slam"]["dmg"]) * _wp("dmg_x", 1.0)
-	var radius: float = float(Config.SKILLS["slam"]["radius"]) * _wp("radius_x", 1.0) * Combat.area_mult() * (1.0 + b.s("slam_radius"))
-	var arc_deg: float = minf(_wp("arc", float(Config.SKILLS["slam"]["arc"])) + b.s("slam_arc"), 360.0)
-	var knock: float = float(Config.SKILLS["slam"]["knock"]) * _wp("knock_x", 1.0) * (1.0 + b.s("slam_knock"))
-	var center: Vector3 = player.global_position
-	if mega:
-		radius *= 2.0
-		arc_deg = 360.0
-		base *= b.s("takeover")
-		knock *= 1.6
-	var in_range := Combat.enemies_in_radius(center, radius)
-	var hits: Array = []
-	var cos_half := cos(deg_to_rad(arc_deg * 0.5))
-	for e in in_range:
-		var d: Vector3 = e.global_position - center
-		d.y = 0.0
-		if d.length() < 1.3 or arc_deg >= 359.0 or d.normalized().dot(dir) >= cos_half:
-			hits.append(e)
-	var fx = GameState.fx
-	var front: Vector3 = center + dir * (radius * 0.45)
-	if fx != null:
-		var col := Color(1.0, 0.85, 0.4, 0.85) if not mega else Color(1.0, 0.45, 0.2, 0.95)
-		fx.ring(front, radius * 0.7, col, 0.28, 0.4)
-		fx.ring(center, radius * (0.5 if not mega else 1.0), Color(1, 1, 1, 0.35), 0.35, 0.3)
-	var n := hits.size()
-	for e in hits:
-		var away: Vector3 = (e.global_position - center)
-		away.y = 0.0
-		away = away.normalized() if away.length() > 0.05 else dir
-		Combat.player_hit(e, base, {"src": "slam", "knock": away * knock, "area_hits": n, "stagger": 0.15})
-	Perks.fire("slam", {"n": n})
-	if not mega and b.s("slam_double") > 0.0 and randf() < b.s("slam_double") and not _double_pending:
-		_double_pending = true
-		_after(0.22, func():
-			_double_pending = false
-			_slam_hit(dir, false))
-	if n > 0:
-		combo_stacks = mini(combo_stacks + 1, 15)
-		combo_timer = 2.0
-		AudioManager.sfx_at("slam", front, -2.0)
-		if GameState.cam != null:
-			GameState.cam.shake(0.22 if not mega else 0.7)
-		if fx != null:
-			fx.burst(front + Vector3(0, 0.7, 0), Color(1, 0.9, 0.6), 6, 5.0, 0.13, 0.4)
-	if mega:
-		AudioManager.sfx("explosion")
-		GameState.toast_msg("¡ADQUISICIÓN HOSTIL!", Color(1.0, 0.8, 0.2))
-	# Onda Residual
-	if b.s("echo_wave") > 0.0:
-		var echo_dmg := base * b.s("echo_wave")
-		_after(0.25, func(): _echo(center, radius * 1.5, echo_dmg))
-	# Maletín Bumerán
-	if b.s("boomerang") > 0.0 and GameState.projectiles != null:
-		var size := 1.0
-		var bdmg := base * b.s("boomerang")
-		if b.s("syn_big_boomerang") > 0.0:
-			size = 1.8
-			bdmg *= 1.4
-		GameState.projectiles.fire_boomerang(center + Vector3(0, 1.1, 0), dir, bdmg, 9.0 * Combat.area_mult(), size, {"src": "boomerang", "flat": false})
+	cd_max[2] = float(Config.SKILLS["seal"]["cd"]) * (1.0 - cd_cut("cd_seal"))
+	cd[2] = cd_max[2]
+	var radius: float = float(Config.SKILLS["seal"]["radius"]) * Combat.area_mult() * (1.0 + b.s("seal_radius"))
+	var count := 1 + int(b.s("seal_extra"))
+	for i in count:
+		var p2 := Vector3(pos.x, 0.0, pos.z)
+		if i > 0:
+			var ang := randf() * TAU
+			p2 += Vector3(cos(ang), 0, sin(ang)) * randf_range(3.0, 5.0)
+		_after(0.05 + 0.12 * i, func(): _place_seal(p2, radius))
+	Perks.fire("skill", {})
+
+
+## Objeción automática: ya no tiene botón; salta sola cuando estás herido y está lista.
+func _auto_barrier_check() -> void:
+	if cd[3] > 0.0 or barrier_active or not player.alive:
+		return
+	if player.hp <= player.max_hp * 0.45 and not Combat.enemies_in_radius(player.global_position, 6.5).is_empty():
+		_cast_barrier()
 
 
 func _echo(center: Vector3, radius: float, dmg: float) -> void:
@@ -378,33 +348,6 @@ func _launch_doc(from: Vector3, d: Vector3, dmg: float, tgt: Node3D, speed: floa
 		"pierce": int(GameState.build.s("docs_pierce")), "turn_add": GameState.build.s("docs_turn")})
 
 
-func _cast_seal() -> bool:
-	if not _pay(2):
-		return false
-	var b: Build = GameState.build
-	cd_max[2] = float(Config.SKILLS["seal"]["cd"]) * (1.0 - cd_cut("cd_seal"))
-	cd[2] = cd_max[2]
-	var count := 1 + int(b.s("seal_extra"))
-	var dir := aim_dir(14.0)
-	player.face_dir(dir, 0.5)
-	player.rig.play("seal", 0.55)
-	var first: Vector3
-	var tgt := Combat.nearest_enemy(player.global_position, 16.0)
-	if tgt != null:
-		first = tgt.global_position
-	else:
-		first = player.global_position + dir * 4.5
-	var radius: float = float(Config.SKILLS["seal"]["radius"]) * Combat.area_mult() * (1.0 + b.s("seal_radius"))
-	for i in count:
-		var pos := first
-		if i > 0:
-			var ang := randf() * TAU
-			pos = first + Vector3(cos(ang), 0, sin(ang)) * randf_range(3.5, 6.0)
-		_after(0.28 + 0.12 * i, func(): _place_seal(pos, radius))
-	_after_secondary()
-	return true
-
-
 func _place_seal(pos: Vector3, radius: float) -> void:
 	if not player.alive:
 		return
@@ -451,8 +394,6 @@ func _update_zones(delta: float) -> void:
 
 
 func _cast_barrier() -> bool:
-	if not _pay(3):
-		return false
 	var b: Build = GameState.build
 	cd_max[3] = float(Config.SKILLS["barrier"]["cd"]) * (1.0 - cd_cut("cd_barrier"))
 	cd[3] = cd_max[3]

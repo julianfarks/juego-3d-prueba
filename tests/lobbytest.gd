@@ -180,11 +180,15 @@ func _stage1() -> void:
 		for i in 8:
 			GameState.player.skills.cd[0] = 0.0
 			dummy._last_dmg = 0.0
+			Feedback.record = true
+			Feedback.event_log.clear()
 			GameState.player.skills.try_cast(0)
-			await _secs(0.75)
-			if dummy._last_dmg > 0.0:
-				tot += dummy._last_dmg
+			await _secs(1.6)                      # el maletín va, golpea y vuelve (el Sello automático añade otros golpes: se mide solo el del maletín)
+			var case_hits: Array = Feedback.event_log.filter(func(x): return x.get("src", "") == "case")
+			if not case_hits.is_empty():
+				tot += float(case_hits[0]["dmg"])
 				n += 1
+			await _secs(0.5)
 		avg[w] = tot / maxf(1.0, float(n))
 		cdm[w] = GameState.player.skills.cd_max[0]
 		print("  arma ", w, ": daño medio ", avg[w], " recarga ", cdm[w])

@@ -53,12 +53,10 @@ func defaults() -> Dictionary:
 		"controls": {
 			# posiciones como fracción de la pantalla (centro del botón) y escala
 			"joystick": {"x": 0.14, "y": 0.74, "scale": 1.0},
-			"attack": {"x": 0.88, "y": 0.72, "scale": 1.15},
-			"skill1": {"x": 0.76, "y": 0.84, "scale": 0.9},
-			"skill2": {"x": 0.68, "y": 0.64, "scale": 0.9},
-			"skill3": {"x": 0.80, "y": 0.50, "scale": 0.9},
-			"jump": {"x": 0.93, "y": 0.50, "scale": 0.95},
-			"dodge": {"x": 0.61, "y": 0.84, "scale": 0.95},
+			"attack": {"x": 0.88, "y": 0.72, "scale": 1.2},
+			"skill1": {"x": 0.77, "y": 0.55, "scale": 0.95},
+			"jump": {"x": 0.94, "y": 0.46, "scale": 0.95},
+			"dodge": {"x": 0.74, "y": 0.86, "scale": 0.95},
 			"interact": {"x": 0.50, "y": 0.62, "scale": 1.0},
 		},
 		"meta": {
@@ -230,6 +228,13 @@ func reset_controls() -> void:
 
 # --- partida en curso (run) --------------------------------------------------
 func _sanitize_after_load() -> void:
+	# v0.6.0: SELLO y OBJECIÓN dejaron de ser botones -> se redistribuye la disposición táctil guardada
+	var st: Dictionary = data["settings"]
+	if int(st.get("controls_v", 0)) < 2:
+		data["controls"] = defaults()["controls"]
+		st["controls_v"] = 2
+	for stale in ["skill2", "skill3"]:
+		(data["controls"] as Dictionary).erase(stale)
 	# equipamiento / dificultad: ids válidos y desbloqueados (si no, valores por defecto)
 	data["loadout"] = LoadoutDB.sanitize(data.get("loadout", {}))
 	var did := String(data.get("difficulty", LoadoutDB.DEFAULT_DIFFICULTY))

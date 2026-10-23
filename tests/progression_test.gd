@@ -489,6 +489,7 @@ func _t8_sanity() -> void:
 		if b.stats.has(ck):
 			ok(float(b.stats[ck]) <= float(UpgradeDB.CAPS[ck]) + 1e-9, "T8 límite duro respetado: %s = %.2f ≤ %.2f" % [ck, float(b.stats[ck]), float(UpgradeDB.CAPS[ck])])
 	var pr := b.power_rating()
+	print("   (aporte estimado del maletín lanzado: ×%.1f)" % (1.0 + b.case_power()))
 	print("   Build teórica con TODO al máximo en legendario: poder ×%.0f, daño%% %.1f, daño total ×%.1f, crítico %.0f%%, vel. ataque +%.0f%%" % [pr, b.s("dmg_pct"), b.s("more_dmg_x"), b.s("crit_chance") * 100.0, b.s("atk_speed") * 100.0])
 	ok(pr < 1.0e14, "T8 la build imposible (los 240+ tipos al máximo, ilegal con el límite de 30) sigue siendo finita y acotada")
 	# la build máxima REAL (un solo árbol de 50 niveles + 40 de otras) es fuerte pero finita

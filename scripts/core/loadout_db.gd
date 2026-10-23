@@ -21,15 +21,15 @@ const SLOT_NAMES := {
 const DEFAULT_LOADOUT := {"weapon": "case", "skill": "docs_burst", "tactic": "brawler", "gear": "toga"}
 
 # cost: honorarios (0 = incluido desde el principio). req_arena: mejor arena alcanzada necesaria.
-# weapon_params (solo herramienta): cd_x tiempo entre golpes, dmg_x daño, radius_x alcance, arc grados, knock_x empuje.
+# weapon_params (solo herramienta): cd_x tiempo entre lanzamientos, dmg_x daño, radius_x alcance, arc grados, knock_x empuje.
 const ITEMS := {
-	"case": {"slot": "weapon", "name": "Maletín Clásico", "desc": "Golpe amplio y equilibrado. El arma de siempre.",
+	"case": {"slot": "weapon", "name": "Maletín Clásico", "desc": "Lanzamiento equilibrado, de curva amplia. El arma de siempre.",
 		"cost": 0, "req_arena": 0, "color": Color(0.75, 0.45, 0.2), "stats": {},
 		"weapon_params": {"cd_x": 1.0, "dmg_x": 1.0, "radius_x": 1.0, "arc": 150.0, "knock_x": 1.0}},
-	"gavel": {"slot": "weapon", "name": "Mazo del Juez", "desc": "Lento y brutal: golpes enormes con gran empuje, pero en un arco corto.",
+	"gavel": {"slot": "weapon", "name": "Mazo del Juez", "desc": "Lento y brutal: lanza el maletín con daño enorme y gran empuje, pero con menos alcance y una curva cerrada.",
 		"cost": 140, "req_arena": 3, "color": Color(0.55, 0.35, 0.15), "stats": {},
 		"weapon_params": {"cd_x": 1.8, "dmg_x": 2.1, "radius_x": 0.85, "arc": 110.0, "knock_x": 1.6}},
-	"quill": {"slot": "weapon", "name": "Pluma Estilete", "desc": "Muy rápida y de largo alcance, pero golpea más flojo y en un arco estrecho.",
+	"quill": {"slot": "weapon", "name": "Pluma Estilete", "desc": "Muy rápida y de largo alcance, pero golpea más flojo y con una curva estrecha.",
 		"cost": 220, "req_arena": 5, "color": Color(0.9, 0.9, 1.0), "stats": {},
 		"weapon_params": {"cd_x": 0.55, "dmg_x": 0.6, "radius_x": 1.25, "arc": 70.0, "knock_x": 0.5}},
 	"docs_burst": {"slot": "skill", "name": "Ráfaga de Documentos", "desc": "Tus Documentos Teledirigidos lanzan más páginas.",
@@ -218,9 +218,9 @@ static func stat_lines(id: String) -> Array:
 		return out
 	if d.has("weapon_params"):
 		var w: Dictionary = d["weapon_params"]
-		out.append("Daño por golpe ×%.2f" % float(w["dmg_x"]))
-		out.append("Velocidad de ataque ×%.2f" % (1.0 / float(w["cd_x"])))
-		out.append("Alcance ×%.2f · Arco %d°" % [float(w["radius_x"]), int(w["arc"])])
+		out.append("Daño por impacto ×%.2f" % float(w["dmg_x"]))
+		out.append("Frecuencia de lanzamiento ×%.2f" % (1.0 / float(w["cd_x"])))
+		out.append("Alcance ×%.2f · Curvatura %d°" % [float(w["radius_x"]), int(w["arc"])])
 		out.append("Empuje ×%.2f" % float(w["knock_x"]))
 	var s: Dictionary = d["stats"]
 	for k in s.keys():

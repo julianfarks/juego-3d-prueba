@@ -73,6 +73,14 @@ func _ready() -> void:
 			add_child(inode)
 			inode.set("main", self)
 		return
+	if Config.cmd_flag("--casetest"):
+		var ctst := load("res://tests/casetest.gd")
+		if ctst != null:
+			var cnode: Node = ctst.new()
+			cnode.name = "CaseTest"
+			add_child(cnode)
+			cnode.set("main", self)
+		return
 	if Config.cmd_flag("--fbtest"):
 		var bt := load("res://tests/fbtest.gd")
 		if bt != null:
@@ -106,6 +114,9 @@ func _build_world() -> void:
 	projectiles = Projectiles.new()
 	projectiles.name = "Projectiles"
 	world.add_child(projectiles)
+	var case_throw := CaseThrow.new()
+	case_throw.name = "CaseThrow"
+	world.add_child(case_throw)
 	arena = Arena.new()
 	arena.name = "Arena"
 	world.add_child(arena)
@@ -592,6 +603,8 @@ func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	if not instant:
 		await _fade_to(1.0, 0.25)
 	projectiles.clear_all()
+	if GameState.case_throw != null:
+		GameState.case_throw.clear_all()
 	var restoring := not resume.is_empty()
 	var stage_name := String(resume.get("stage", "fight"))
 	var pos := arena.start(idx, int(resume["arena_seed"]) if restoring else -1)

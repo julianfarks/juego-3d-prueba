@@ -324,10 +324,6 @@ func _autoplay(_dt: float) -> void:
 	_frame += 1
 	if _frame % 90 == 0:
 		p.skills.try_cast(1)
-	if _frame % 140 == 0:
-		p.skills.try_cast(2)
-	if _frame % 200 == 0:
-		p.skills.try_cast(3)
 	if _frame % 120 == 0:
 		Input.action_press("dodge")
 	elif _frame % 120 == 3:

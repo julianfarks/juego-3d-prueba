@@ -6,14 +6,13 @@ extends Control
 
 signal edit_finished
 
-const BUTTONS := ["attack", "jump", "dodge", "skill1", "skill2", "skill3", "interact"]
+const BUTTONS := ["attack", "jump", "dodge", "skill1", "interact"]   # SELLO y OBJECIÓN ya no son botones (automáticos)
 const LABELS := {
-	"attack": "ATACAR", "jump": "SALTAR", "dodge": "ESQUIVAR", "skill1": "DOCS", "skill2": "SELLO",
-	"skill3": "OBJECIÓN", "interact": "USAR",
+	"attack": "ATACAR", "jump": "SALTAR", "dodge": "ESQUIVAR", "skill1": "DOCS", "interact": "USAR",
 }
 const COLORS := {
 	"attack": Color(1.0, 0.45, 0.25), "jump": Color(0.4, 0.8, 1.0), "dodge": Color(0.5, 1.0, 0.7),
-	"skill1": Color(1.0, 0.85, 0.35), "skill2": Color(0.8, 0.5, 1.0), "skill3": Color(0.4, 0.7, 1.0),
+	"skill1": Color(1.0, 0.85, 0.35),
 	"interact": Color(1.0, 1.0, 1.0),
 }
 const BASE_R := 54.0
@@ -233,7 +232,7 @@ func _draw() -> void:
 		var afford := true
 		if pl != null and not edit_mode:
 			match name:
-				"skill1", "skill2", "skill3":
+				"skill1":
 					var slot := int(name.substr(5))
 					cdf = pl.skills.cd_fraction(slot)
 					afford = pl.skills.energy >= pl.skills.skill_cost(slot)

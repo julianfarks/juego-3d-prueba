@@ -34,6 +34,7 @@ var fx: Node = null
 var main: Node = null
 var cam: Node = null
 var projectiles: Node = null
+var case_throw: Node = null          # CaseThrow: maletín bumerán (ataque principal)
 
 var difficulty_id := "associate"     # dificultad de la partida en curso
 var loadout: Dictionary = {}         # equipamiento de la partida en curso (ver LoadoutDB)
@@ -71,8 +72,6 @@ func _register_actions() -> void:
 		"jump": [KEY_SPACE],
 		"dodge": [KEY_SHIFT],
 		"skill1": [KEY_Q],
-		"skill2": [KEY_E],
-		"skill3": [KEY_R],
 		"interact": [KEY_F],
 		"pause": [KEY_ESCAPE],
 	}

@@ -198,7 +198,7 @@ func synergy_progress(syn: Dictionary) -> Dictionary:
 	for nk in (syn["needs"] as Dictionary).keys():
 		var cur3 := s(nk)
 		var need3 := float(syn["needs"][nk])
-		parts.append({"label": String(UpgradeDB.STAT_LABELS.get(nk, nk)), "ok": cur3 >= need3, "cur": cur3, "need": need3, "stat": true})
+		parts.append({"label": UpgradeDB.stat_label(String(nk)), "ok": cur3 >= need3, "cur": cur3, "need": need3, "stat": true})
 	for pt in parts:
 		if not pt["ok"]:
 			all_ok = false
@@ -354,9 +354,19 @@ func power_rating() -> float:
 	r *= 1.0 + s("aoe_pct") * 0.5                 # radio mayor => golpea a más enemigos
 	r *= 1.0 + s("echo_wave") * 0.3 + s("boomerang") * 0.3 + s("kill_nova") * 0.15
 	r *= 1.0 + s("crit_explosion") * 0.15 * minf(s("crit_chance") + 0.05, 1.0)
+	r *= pow(1.0 + case_power(), 0.6)           # rendimientos decrecientes: es una estimación, no daño real
 	r *= 1.0 + active_synergies.size() * 0.15
 	r *= 1.0 + perk_power()
 	return r
+
+
+## Aporte estimado de las mejoras del maletín lanzado (CaseThrow): cada efecto pesa según cuánto daño añade por impacto.
+func case_power() -> float:
+	var p := s("bc_dmg") + 0.45 * s("bc_blast") + 0.5 * s("bc_pyro") + 0.10 * s("bc_frag") * (1.0 + s("bc_frag_dmg") * 10.0) + 0.3 * s("bc_docs")
+	p += 0.4 * s("bc_rain") + 0.5 * s("bc_shock") + 0.3 * s("bc_corr") + 0.7 * s("bc_trail") + 0.3 * s("bc_multi") + 0.35 * s("bc_return")
+	p += 0.12 * s("bc_pierce") + 0.1 * s("bc_bounce") + 0.5 * s("bc_cases") + 0.35 * s("bc_double") + 0.75 * s("bc_crit") + 0.5 * s("bc_sharp")
+	p += 0.25 * s("bc_range") + 0.2 * s("bc_size") + 0.15 * s("bc_speed") + 0.2 * s("bc_wall")
+	return p
 
 
 ## Estimación (aproximada, solo para el indicador de la HUD y las simulaciones) del daño extra que aportan las

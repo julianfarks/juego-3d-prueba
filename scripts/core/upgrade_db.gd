@@ -55,6 +55,12 @@ const CAPS := {
 	"cd_barrier": 0.6, "cd_slam": 0.5, "docs_pierce": 6.0, "docs_speed": 1.5, "docs_turn": 12.0, "cost_cut": 0.5,
 	"slam_double": 0.6, "burn_spread": 0.8, "slow_amt": 0.35, "reroll_cut": 0.6, "exec_thr": 0.24, "slam_arc": 200.0, "kill_coins": 0.5,
 	"explosion_pow": 3.0, "explo_rad": 1.2, "slam_radius": 1.0, "seal_radius": 1.5, "knock_pow": 3.0,
+	# maletín lanzado (CaseThrow): probabilidades al 100 % y el resto acotado para que ninguna cadena rompa el rendimiento
+	"bc_dmg": 5.0, "bc_range": 1.0, "bc_size": 0.8, "bc_speed": 1.0, "bc_homing": 0.95, "bc_sharp": 1.0, "bc_crit": 0.6,
+	"bc_blast": 3.0, "bc_blast_r": 1.5, "bc_pyro": 1.0, "bc_pyro_n": 4.0, "bc_frag": 10.0, "bc_frag_dmg": 0.6, "bc_docs": 8.0,
+	"bc_rain": 1.0, "bc_rain_n": 6.0, "bc_shock": 1.0, "bc_shock_n": 6.0, "bc_corr": 1.0, "bc_spread": 12.0, "bc_trail": 2.0,
+	"bc_multi": 3.0, "bc_return": 4.2, "bc_return_r": 1.5, "bc_catch": 0.8, "bc_pierce": 8.0, "bc_bounce": 8.0, "bc_wall": 6.0,
+	"bc_cases": 5.0, "bc_double": 4.0,
 }
 
 ## Máximo de niveles de cualquier mejora y separación entre hitos (multiplicadores extra por cada 10 niveles).
@@ -63,9 +69,9 @@ const MILESTONE_EVERY := 10
 
 ## Afinidad con el equipamiento de la Sala Central: esas mejoras salen más a menudo.
 const EQUIP_AFFINITY := {
-	"case": ["heavy_case", "echo_wave", "boomerang_case", "wide_sweep"],
-	"gavel": ["heavy_case", "gavel", "wide_sweep", "verdict"],
-	"quill": ["espresso", "expert_eye", "static_objection", "lucky_break"],
+	"case": ["heavy_case", "echo_wave", "boomerang_case", "wide_sweep", "case_blast", "case_pyro", "case_bounce", "case_cases"],
+	"gavel": ["heavy_case", "gavel", "wide_sweep", "verdict", "case_size", "case_return", "case_pierce"],
+	"quill": ["espresso", "expert_eye", "static_objection", "lucky_break", "case_speed", "case_multi", "case_shock"],
 	"docs_burst": ["paper_storm", "skill_power", "multitask"],
 	"seal_master": ["twin_seal", "wide_sweep", "energy_zone"],
 	"objection_iron": ["loaded_barrier", "vest", "immunity"],
@@ -147,7 +153,7 @@ static func _ensure() -> void:
 	# ---------------------------------------------------------------- ÁREA
 	_u("wide_sweep", "Barrido Amplio", "aoe", "ring", "Radio de todas tus áreas +{aoe_pct}", {"aoe_pct": 0.03}, {"aoe_pct": "p"}, {"max": 30, "mile": {"more_dmg_x": 0.1}})
 	_u("class_action", "Demanda Colectiva", "aoe", "crowd", "+{crowd_dmg} de daño por cada enemigo extra alcanzado (máx. 40%)", {"crowd_dmg": 0.02}, {"crowd_dmg": "p"}, {"max": 15})
-	_u("echo_wave", "Onda Residual", "aoe", "echo", "Cada golpe de maletín genera una onda secundaria ({echo_wave} del daño)", {"echo_wave": 0.12}, {"echo_wave": "p"}, {"max": 20, "mile": {"echo_wave": 0.2}})
+	_u("echo_wave", "Onda Residual", "aoe", "echo", "Cada impacto del maletín genera una onda secundaria ({echo_wave} del daño)", {"echo_wave": 0.12}, {"echo_wave": "p"}, {"max": 20, "mile": {"echo_wave": 0.2}})
 	# ------------------------------------------------------------ ELEMENTAL
 	_u("hot_ink", "Tinta Hirviente", "elem", "flame", "{burn_chance} de incendiar ({burn_dps} daño/s)", {"burn_chance": 0.06, "burn_dps": 5.0}, {"burn_chance": "p", "burn_dps": "i"}, {"max": 20, "mile": {"burn_dps": 6.0}})
 	_u("frozen_assets", "Activos Congelados", "elem", "snow", "{slow_chance} de ralentizar un 45% (y {freeze_chance} de congelar)", {"slow_chance": 0.08, "freeze_chance": 0.006}, {"slow_chance": "p", "freeze_chance": "p"}, {"max": 15})
@@ -182,6 +188,7 @@ static func _ensure() -> void:
 		if _by_id.has(id):
 			_by_id[id]["tags"] = UpgradeCatalog.EXISTING_TAGS[id]
 	UpgradeCatalog.register()
+	CaseCatalog.register()
 
 
 # ---------------------------------------------------------------- SINERGIAS
@@ -225,6 +232,7 @@ static func synergies() -> Array:
 		{"id": "tag_ctrl", "name": "Orden en la Sala", "desc": "4 mejoras de control: +20% de aturdir/ralentizar y +10% de reducción de daño.", "needs": {}, "tags": {"control": 4}, "gives": {"slow_chance": 0.2, "armor": 0.1}},
 		{"id": "tag_money", "name": "Bufete Próspero", "desc": "5 mejoras de monedas: +15% de descuento en tienda y +1 moneda por baja.", "needs": {}, "tags": {"monedas": 5}, "gives": {"shop_discount": 0.15, "kill_coins": 1.0}},
 	]
+	_syn_cache.append_array(CaseCatalog.synergies())
 	return _syn_cache
 
 
@@ -495,7 +503,7 @@ static func _fmt_stat(key: String, v: float, f: String) -> String:
 	return "%s %s" % [label, fmt_value(f, v)]
 
 
-const EVENT_NAMES := {"hit": "Al golpear", "crit": "Al crítico", "kill": "Al eliminar", "slam": "Al golpe de maletín", "skill": "Al usar habilidad",
+const EVENT_NAMES := {"hit": "Al golpear", "crit": "Al crítico", "kill": "Al eliminar", "slam": "Al impactar el maletín", "skill": "Al usar habilidad",
 	"dodge": "Al esquivar", "hurt": "Al recibir daño", "shield_break": "Al romperse el escudo", "arena_clear": "Al limpiar arena", "arena_start": "Al empezar arena",
 	"levelup": "Al subir de nivel", "t3": "Cada 3 s", "t5": "Cada 5 s", "t8": "Cada 8 s", "t12": "Cada 12 s"}
 const EFFECT_NAMES := {"heal_pct": "curar", "heal_flat": "curar", "shield": "escudo", "energy": "Expediente", "cdr": "enfriamientos", "buff_dmg": "daño temporal",
@@ -519,6 +527,8 @@ static func stat_label(key: String) -> String:
 		return "Daño (%s)" % COND_NAMES.get(key.substr(2), key.substr(2))
 	if key.begins_with("s:"):
 		return "Daño de %s" % key.substr(2)
+	if CaseCatalog.LABELS.has(key):
+		return String(CaseCatalog.LABELS[key])
 	return String(STAT_LABELS.get(key, key))
 
 

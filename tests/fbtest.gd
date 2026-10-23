@@ -103,6 +103,7 @@ func _run() -> void:
 	main.arena.force_complete()
 	await _secs(1.0)
 	fx = GameState.fx
+	SaveSystem.data["settings"]["auto_attack"] = false       # el lanzamiento automático del maletín no debe sumar daño a las mediciones
 	Feedback.record = true
 	AudioManager.record_combat = true
 	GameState.kill_streak = 0

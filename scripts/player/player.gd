@@ -265,10 +265,6 @@ func _physics_process(delta: float) -> void:
 		skills.try_cast(0)
 	if Input.is_action_just_pressed("skill1"):
 		skills.try_cast(1)
-	if Input.is_action_just_pressed("skill2"):
-		skills.try_cast(2)
-	if Input.is_action_just_pressed("skill3"):
-		skills.try_cast(3)
 	# --- interacción ---
 	_update_interaction()
 	if Input.is_action_just_pressed("interact") and interact_target != null:
@@ -278,7 +274,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _enemy_in_reach() -> bool:
-	var e := Combat.nearest_enemy(global_position, 4.2)
+	var e := Combat.nearest_enemy(global_position, 8.0)
 	return e != null
 
 

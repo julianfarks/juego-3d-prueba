@@ -184,6 +184,29 @@ func _compute() -> void:
 				_s("leg_r", -0.5)
 				_s("shin_r", -0.4)
 				_hips_y_off -= 0.14 * k2
+		"throw":
+			# preparación (0-0.4): brazo atrás y torso girado; latigazo (0.4-0.7): el brazo vuela hacia delante; remate
+			if p < 0.4:
+				var kt := ease(p / 0.4, 0.5)
+				_s("arm_r", lerpf(0.3, 2.6, kt), 0.0, lerpf(0.15, 0.55, kt))
+				_s("fore_r", lerpf(0.3, 1.2, kt))
+				_s("arm_l", lerpf(0.0, -0.8, kt), 0.0, -0.4)
+				_s("torso", lerpf(0.0, 0.1, kt), lerpf(0.0, 0.7, kt))
+				_s("head", lerpf(0.0, -0.1, kt))
+				_s("leg_l", lerpf(0.0, 0.5, kt))
+				_s("leg_r", lerpf(0.0, -0.4, kt))
+				_hips_y_off -= 0.05 * kt
+			else:
+				var kw := clampf((p - 0.4) / 0.3, 0.0, 1.0)
+				_s("arm_r", lerpf(2.6, 1.35, ease(kw, 0.3)), 0.0, lerpf(0.55, -0.1, kw))
+				_s("fore_r", lerpf(1.2, 0.05, kw))
+				_s("arm_l", -0.8, 0.0, -0.4)
+				_s("torso", lerpf(0.1, -0.2, kw), lerpf(0.7, -0.55, ease(kw, 0.4)))
+				_s("head", 0.1)
+				_s("leg_l", 0.7)
+				_s("shin_l", -0.15)
+				_s("leg_r", -0.5)
+				_hips_y_off -= 0.08 * kw
 		"swing":
 			var k3 := ease(p, 0.6)
 			_s("torso", -0.1, lerpf(-0.9, 1.0, k3))

@@ -4,7 +4,7 @@ extends Node
 ## cada enemigo individualmente.
 
 const GAME_NAME := "LAWYER MAYHEM 3D"
-const VERSION := "0.5.0"
+const VERSION := "0.6.0"
 
 # Capas de física (máscaras de bits)
 const L_WORLD := 1
@@ -35,7 +35,7 @@ const PLAYER := {
 # --- Habilidades base --------------------------------------------------------
 # slot 0: primaria; 1..3 secundarias
 const SKILLS := {
-	"slam": {"name": "Golpe de Maletín", "cd": 0.55, "dmg": 24.0, "radius": 3.6, "arc": 150.0, "cost": 0.0, "knock": 7.0},
+	"slam": {"name": "Lanzamiento de Maletín", "cd": 0.55, "dmg": 24.0, "radius": 3.6, "arc": 150.0, "cost": 0.0, "knock": 7.0},
 	"docs": {"name": "Documentos Teledirigidos", "cd": 4.0, "dmg": 16.0, "count": 4, "cost": 18.0, "speed": 15.0, "range": 28.0},
 	"seal": {"name": "Sello Mágico", "cd": 7.5, "dmg": 9.0, "radius": 4.2, "duration": 4.5, "cost": 28.0, "tick": 0.4},
 	"barrier": {"name": "Objeción", "cd": 11.0, "dmg": 20.0, "radius": 5.2, "duration": 3.0, "cost": 34.0, "shield": 45.0, "knock": 16.0},

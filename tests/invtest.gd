@@ -326,6 +326,11 @@ func _ui_part() -> void:
 		if not b.counts.has(id):
 			new_id = id
 			break
+	for fid in _types(100):                         # asegura 30/30 (la carta elegida antes puede haber subido nivel en vez de entrar)
+		if b.type_count() >= 30:
+			break
+		if fid != new_id and not b.counts.has(fid):
+			b.add(fid, 0, true)
 	cs3._cards[0] = {"id": new_id, "rarity": 0}
 	cs3._rebuild()
 	cs3._select(0)
@@ -459,7 +464,10 @@ func _behavior_part() -> void:
 				for e in _enemies:
 					if e.marked_t > 0.0:
 						okk = true
-			"stun_area": okk = _enemy_hp_lost() > lost0
+			"stun_area":                        # el aturdimiento es silencioso (sin daño): se comprueba el estado real del enemigo
+				for e in _enemies:
+					if is_instance_valid(e) and e.alive and e.state == Enemy.S.HURT:
+						okk = true
 			"coins": okk = GameState.coins > coins0
 			"xp": okk = GameState.xp != xp0 or GameState.level > 0
 			"missile", "boomerang": okk = GameState.projectiles.active.size() > proj0 or _enemy_hp_lost() > lost0

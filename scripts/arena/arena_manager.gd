@@ -143,6 +143,8 @@ func _teardown() -> void:
 	_hazards.clear()
 	if GameState.projectiles != null:
 		GameState.projectiles.clear_all()
+	if GameState.case_throw != null:
+		GameState.case_throw.clear_all()
 	if GameState.fx != null:
 		GameState.fx.clear_all()
 	for n in get_tree().get_nodes_in_group("interactable"):

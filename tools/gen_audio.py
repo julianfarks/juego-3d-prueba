@@ -683,6 +683,76 @@ def sfx_shield():
 
 
 # ---------------------------------------------------------------------------
+# --- maletín bumerán (v0.6.0) -------------------------------------------------
+def sfx_throw():
+    """Lanzamiento: latigazo grave + silbido ascendente rápido."""
+    n = int(SR * 0.32)
+    whoosh = highpass(lowpass(noise(0.32), np.linspace(700, 5200, n)), 350) * adsr(n, 0.02, 0.08, 0.35, 0.15)
+    pitch = sweep(260, 900, 0.32) * exp_env(n, 6) * 0.35
+    thump = sweep(150, 60, 0.12)
+    out = whoosh + pitch
+    out[: len(thump)] += thump * exp_env(len(thump), 14) * 0.9
+    return out
+
+
+def sfx_catch():
+    """Recuperación: palmada seca de cuero + clic metálico de cierres."""
+    n = int(SR * 0.22)
+    slap = lowpass(noise(0.22), 1800) * exp_env(n, 26) * 0.9
+    body = sweep(200, 90, 0.22) * exp_env(n, 20)
+    out = slap + body * 0.8
+    cl = sine(2400, 0.05) * exp_env(int(SR * 0.05), 60) * 0.35
+    out[int(SR * 0.05): int(SR * 0.05) + len(cl)] += cl
+    return out
+
+
+def sfx_bounce():
+    """Rebote: ping metálico corto con caída de tono."""
+    n = int(SR * 0.24)
+    ping = (sine(1250, 0.24) * 0.6 + sine(1880, 0.24) * 0.3) * exp_env(n, 16)
+    ping *= 1.0 + 0.0 * np.arange(n)
+    tick = highpass(noise(0.24), 3000) * exp_env(n, 60) * 0.3
+    return ping + tick
+
+
+def sfx_shard():
+    """Fragmentos: ráfaga de esquirlas agudas."""
+    n = int(SR * 0.3)
+    out = np.zeros(n)
+    for i in range(5):
+        st = int(SR * 0.03 * i)
+        seg = highpass(noise(0.1), 2500 + 400 * i) * exp_env(int(SR * 0.1), 30)
+        out[st: st + len(seg)] += seg[: n - st] * (0.7 - 0.08 * i)
+    return out
+
+
+def sfx_fw_launch():
+    """Cohete: silbido ascendente con chisporroteo."""
+    n = int(SR * 0.45)
+    wh = sweep(500, 2400, 0.45) * adsr(n, 0.02, 0.1, 0.6, 0.2) * 0.45
+    fizz = highpass(noise(0.45), 2500) * exp_env(n, 3) * 0.4
+    return wh + fizz
+
+
+def sfx_fw_pop():
+    """Estallido de fuego artificial: pop + chispas."""
+    n = int(SR * 0.55)
+    pop = lowpass(noise(0.55), np.linspace(5000, 600, n)) * exp_env(n, 9)
+    boom = sweep(220, 70, 0.3) * exp_env(int(SR * 0.3), 12)
+    out = pop
+    out[: len(boom)] += boom * 0.9
+    crackle = highpass(noise(0.55), 4000) * (np.random.rand(n) > 0.985) * exp_env(n, 4) * 3.0
+    return out + crackle
+
+
+def sfx_paper():
+    """Lluvia de papeles: frufrú de hojas."""
+    n = int(SR * 0.4)
+    x = highpass(lowpass(noise(0.4), 6000), 1500)
+    am = 0.5 + 0.5 * np.sin(2 * np.pi * 28 * ts(0.4) + np.random.rand() * 6.28)
+    return x * am * adsr(n, 0.03, 0.1, 0.5, 0.2) * 0.8
+
+
 def main():
     print("Generando audio en", os.path.normpath(OUT))
     print("Música:")
@@ -707,6 +777,8 @@ def main():
         "alert": sfx_alert(), "victory": sfx_victory(), "defeat": sfx_defeat(), "click": sfx_click(),
         "levelup": sfx_levelup(), "heal": sfx_heal(), "portal": sfx_portal(), "phase": sfx_phase(),
         "shield": sfx_shield(),
+        "throw": sfx_throw(), "catch": sfx_catch(), "bounce": sfx_bounce(), "shard": sfx_shard(),
+        "fw_launch": sfx_fw_launch(), "fw_pop": sfx_fw_pop(), "paper": sfx_paper(),
     }
     for name, data in sfx.items():
         write_wav("sfx_" + name, finish(data, 0.9))

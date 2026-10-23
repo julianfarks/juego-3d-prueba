@@ -15,10 +15,10 @@ de los roguelikes de arenas (cofres, cartas, builds), pero con contenido 100 % o
 | Prueba táctil en móvil real | **Pendiente** (los controles se probaron con eventos táctiles sintéticos) |
 
 ## Jugar
-- Móvil: joystick izquierdo (flotante), arrastra a la derecha para la cámara, botones: atacar, saltar, esquivar,
-  3 habilidades (Documentos, Sello, Objeción) y USAR (cofres, portales, tienda). Ajustes → *Editar controles*
-  permite mover y cambiar el tamaño de cada botón.
-- PC (pruebas): WASD, flechas = cámara, J/Ctrl atacar, Espacio saltar, Shift esquivar, Q/E/R habilidades, F usar, Esc pausa.
+- Móvil: joystick izquierdo (flotante), arrastra a la derecha para la cámara, botones: **ATACAR** (lanza el maletín bumerán),
+  **DOCS**, **ESQUIVAR**, **SALTAR** y USAR (cofres, portales, tienda). SELLO y OBJECIÓN ya no son botones (ver 0.6.0).
+  Ajustes → *Editar controles* permite mover y cambiar el tamaño de cada botón.
+- PC (pruebas): WASD, flechas = cámara, J/Ctrl atacar, Espacio saltar, Shift esquivar, Q documentos, F usar, Esc pausa.
 
 ## Flujo
 Arena de eliminación → supervivencia → desafío (minijefe) → élite → jefe de zona. Cada arena completada da un cofre
@@ -35,6 +35,16 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
+
+## Novedades 0.6.0 — maletín bumerán, controles simplificados y builds de proyectiles
+- **ATACAR lanza el maletín** (`scripts/combat/case_throw.gd`, nodo `CaseThrow`): objeto 3D visible durante todo el recorrido, trayectoria **curva** de ida, giro rápido, estela, regreso curvo hacia la mano y recuperación (el maletín de la mano se oculta mientras vuela y reaparece al atraparlo). Hasta que vuelve **no se puede lanzar otro** (sin lanzamientos infinitos ni maletines duplicados). El golpe cuerpo a cuerpo (`_slam_hit`) fue eliminado.
+- **Botones**: se quitan SELLO y OBJECIÓN (ni botón, ni zona táctil, ni acción de teclado). Quedan ATACAR, DOCS, ESQUIVAR, SALTAR (+ USAR contextual), redistribuidos sin solapes; los guardados antiguos se migran a la nueva disposición. Las mecánicas se conservan: el **Sello Mágico** se deposita solo en el punto más lejano de la ida del maletín (con su enfriamiento y mejoras) y la **Objeción** salta sola con la vida por debajo del 45 % y enemigos cerca.
+- **24 mejoras nuevas del maletín** (`scripts/core/case_catalog.gd`; datos `bc_*` que lee `CaseThrow.make_profile()`): Maletín Pirotécnico, Rastro de Fuego, Explosión Legal, Documentos Explosivos, Multilanzamiento, Fragmentación, Cadena de Impactos, Maletín Eléctrico, Maletín Corrosivo, Retorno Explosivo, Rebote Judicial, Perforación Documental, Crítico Contractual, Lluvia de Documentos, Doble Maletín, Rebotes de Maletín (≈3 s por el entorno), Multi Maletín (+1 maletín por nivel) y mejoras base (daño, alcance, tamaño, velocidad, teledirección, golpe en el regreso, prisa al atrapar). Se suben de nivel al repetirse en cofres (máximo propio de cada una) y entran en el inventario de 30 tipos con descripción y efecto acumulado. 6 sinergias nuevas (Fiesta Pirotécnica, Pararrayos Judicial, Gran Final, Estela Infernal, Pinball Legal, Arsenal Aéreo).
+- **Todo se combina en la misma tirada** (`CaseThrow._impact`): daño normal/crítico → explosión → fuegos artificiales → fragmentos → documentos → lluvia → rayo → corrosión/propagación de estados → onda residual → el maletín perfora/rebota/vuelve → efectos de retorno (una sola vez por lanzamiento, aunque haya varios maletines).
+- **Daño y feedback**: cada impacto, explosión, fragmento, cohete, rayo, minimaletín o brasa llama a `Combat.player_hit/explode`, así que usa los números y sonidos de 0.5.0. Orígenes nuevos: `case`, `case_boom`, `firework`, `frag`, `mini`, `rain`, `fire_trail`, `return_blast`, `docs_boom`. Las mejoras `s:slam`/`s:boomerang` también potencian el maletín lanzado.
+- **Rendimiento**: límites duros (7 maletines, 40 secundarios vivos, 24 brasas, 14 explosiones/s, 90 proyectiles), objetos reutilizados (pools), destellos tenues en cascadas para no tapar enemigos, y 7 sonidos nuevos propios (`throw`, `catch`, `bounce`, `shard`, `fw_launch`, `fw_pop`, `paper`) bajo el mismo presupuesto por ventana de 100 ms.
+- Pruebas: `--casetest` (renderizado, 128 comprobaciones: lanzar/volver/relanzar, trayectoria curva, impactos correctos y sin duplicados, cada mejora, combinaciones en una tirada, secundarios con números y sonidos, DOCS/ESQUIVAR/SALTAR, botones, migración de guardado, niveles/sinergias/límite de 30, estrés y capturas).
+- **Límites honestos**: el tacto y el rendimiento en un Android real **no están medidos** (solo CPU en PC con renderizado por software: ≈1 ms/fotograma de media en cascada extrema, ×3-5 estimado en móvil); el audio se verifica por flujo, no se ha escuchado; el equilibrio de daño de las mejoras es una primera pasada sin ajustar con partidas reales.
 
 ## Novedades 0.5.0 — números de daño flotantes y sonido de impacto
 - **Un único punto de verdad** (`scripts/combat/feedback.gd`): todo daño a un enemigo llega a `Enemy.take_damage()`, que ya recibe el valor final (`Combat.calc` + resistencia de élite) y llama una sola vez a `Feedback.on_damage()`. Número y sonido salen de ese mismo evento y de ese mismo valor; el muñeco de práctica usa el mismo camino.

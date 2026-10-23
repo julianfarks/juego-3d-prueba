@@ -10,6 +10,8 @@ const COLORS := {
 	"exec": Color(1.0, 0.25, 0.3),
 }
 
+const CASE_FAMILY := ["case", "mini", "frag", "firework", "case_boom", "return_blast", "rain", "fire_trail"]
+
 static var _nova_depth := 0
 static var _chain_guard := 0
 
@@ -87,6 +89,8 @@ static func calc(enemy: Node3D, base: float, opts: Dictionary) -> Dictionary:
 	var crit := false
 	if not opts.get("no_crit", false):
 		var cc := 0.05 + b.s("crit_chance") + Perks.buff("crit")
+		if CASE_FAMILY.has(String(opts.get("src", ""))):
+			cc += b.s("bc_crit")                         # Crítico Contractual: solo impactos del maletín y sus derivados
 		crit = opts.get("force_crit", false) or randf() < cc
 	if crit:
 		dmg *= 1.75 + b.s("crit_mult")
@@ -162,7 +166,9 @@ static func explode(pos: Vector3, radius: float, damage: float, opts: Dictionary
 	var fx = GameState.fx
 	if fx != null:
 		fx.ring(pos, radius, Color(1.0, 0.7, 0.2, 0.85), 0.35, 0.3)
-		fx.flash_sphere(pos + Vector3(0, 0.6, 0), radius * 0.55, Color(1.0, 0.8, 0.35, 0.7), 0.22)
+		# 'soft': explosiones en cascada del maletín: destello tenue y pequeño para no tapar a los enemigos
+		var soft: bool = opts.get("soft", false)
+		fx.flash_sphere(pos + Vector3(0, 0.6, 0), radius * (0.3 if soft else 0.55), Color(1.0, 0.8, 0.35, 0.22 if soft else 0.7), 0.16 if soft else 0.22)
 		fx.burst(pos + Vector3(0, 0.5, 0), Color(1.0, 0.75, 0.25), 8, 6.0, 0.14, 0.45)
 	var exclude = opts.get("exclude", null)
 	var hits := enemies_in_radius(pos, radius)

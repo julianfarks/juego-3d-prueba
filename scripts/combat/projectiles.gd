@@ -262,3 +262,5 @@ func _player_projectile_hit(p: P, e: Node3D) -> void:
 	if GameState.build.has_synergy("perfect_storm") and p.kind == "doc":
 		o["force_crit"] = randf() < 0.25
 	Combat.player_hit(e, p.dmg, o)
+	if o.get("explode", false) and is_instance_valid(e):      # Documentos Explosivos (mejora del maletín)
+		Combat.explode(p.pos, 2.0 * Combat.area_mult(), p.dmg * 0.7, {"src": "docs_boom", "exclude": e})
