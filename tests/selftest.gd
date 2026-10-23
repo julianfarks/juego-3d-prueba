@@ -96,12 +96,12 @@ func _test_touch() -> void:
 	var down := InputEventScreenTouch.new()
 	down.index = 0
 	down.pressed = true
-	down.position = Vector2(220, 520)
+	down.position = _w(Vector2(220, 520))
 	Input.parse_input_event(down)
 	await _frames(2)
 	var drag := InputEventScreenDrag.new()
 	drag.index = 0
-	drag.position = Vector2(300, 440)
+	drag.position = _w(Vector2(300, 440))
 	drag.relative = Vector2(80, -80)
 	Input.parse_input_event(drag)
 	await _frames(2)
@@ -113,7 +113,7 @@ func _test_touch() -> void:
 	var up := InputEventScreenTouch.new()
 	up.index = 0
 	up.pressed = false
-	up.position = drag.position
+	up.position = _w(drag.position)
 	Input.parse_input_event(up)
 	await _frames(2)
 	mv = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -124,12 +124,12 @@ func _test_touch() -> void:
 	var d2 := InputEventScreenTouch.new()
 	d2.index = 1
 	d2.pressed = true
-	d2.position = Vector2(900, 300)
+	d2.position = _w(Vector2(900, 300))
 	Input.parse_input_event(d2)
 	await _frames(2)
 	var dr2 := InputEventScreenDrag.new()
 	dr2.index = 1
-	dr2.position = Vector2(960, 300)
+	dr2.position = _w(Vector2(960, 300))
 	dr2.relative = Vector2(60, 0)
 	Input.parse_input_event(dr2)
 	await _frames(2)
@@ -140,7 +140,7 @@ func _test_touch() -> void:
 	var u2 := InputEventScreenTouch.new()
 	u2.index = 1
 	u2.pressed = false
-	u2.position = dr2.position
+	u2.position = _w(dr2.position)
 	Input.parse_input_event(u2)
 	await _frames(2)
 	# botón de ataque
@@ -148,17 +148,17 @@ func _test_touch() -> void:
 	var ba := InputEventScreenTouch.new()
 	ba.index = 2
 	ba.pressed = true
-	ba.position = c
+	ba.position = _w(c)
 	Input.parse_input_event(ba)
 	await _frames(2)
 	if not Input.is_action_pressed("attack"):
-		_fail("botón atacar no activó la acción (centro %s, visible %s)" % [c, t._button_at(c)])
+		_fail("botón atacar no activó la acción (centro %s, btn %s, ptrs %s, pressed %s)" % [c, t._button_at(c), t._pointers, t._pressed])
 	else:
 		_log("botón atacar OK")
 	var bu := InputEventScreenTouch.new()
 	bu.index = 2
 	bu.pressed = false
-	bu.position = c
+	bu.position = _w(c)
 	Input.parse_input_event(bu)
 	await _frames(2)
 	if Input.is_action_pressed("attack"):
@@ -346,3 +346,8 @@ func _finish() -> void:
 	var errs: int = (report["errors"] as Array).size()
 	print("[SELFTEST] FIN: %d arenas, %d errores de lógica, enemigos máx %d, proyectiles máx %d" % [(report["arenas"] as Array).size(), errs, report["max_enemies"], report["max_projectiles"]])
 	get_tree().quit(1 if errs > 0 else 0)
+
+
+## Convierte coordenadas del lienzo 1280x720 a coordenadas de ventana (el autojuego usa ventanas pequeñas).
+func _w(v: Vector2) -> Vector2:
+	return v * Vector2(get_window().size) / Vector2(1280, 720)
