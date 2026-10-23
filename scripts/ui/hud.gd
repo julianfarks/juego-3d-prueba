@@ -4,6 +4,7 @@ extends Control
 ## sinergias y medidor de potencia del build, destellos de daño y botón de pausa.
 
 signal pause_pressed
+signal inventory_pressed
 
 var _hp_bar: ProgressBar
 var _hp_label: Label
@@ -21,6 +22,7 @@ var _boss_bar: ProgressBar
 var _toasts: VBoxContainer
 var _prompt: Label
 var _power_label: Label
+var _inv_btn: Button
 var _power_bar: ProgressBar
 var _syn_box: HBoxContainer
 var _fps_label: Label
@@ -130,13 +132,17 @@ func _build() -> void:
 	pb.pressed.connect(func(): pause_pressed.emit())
 	add_child(pb)
 	UIKit.place(pb, 1.0, 0.0, -92, 14, 72, 72)
+	_inv_btn = UIKit.button("MEJ 0/30", Vector2(120, 72), 20)
+	_inv_btn.pressed.connect(func(): inventory_pressed.emit())
+	add_child(_inv_btn)
+	UIKit.place(_inv_btn, 1.0, 0.0, -222, 14, 120, 72)
 	_fps_label = UIKit.label("", 18, Color(0.7, 1, 0.7), HORIZONTAL_ALIGNMENT_RIGHT)
 	add_child(_fps_label)
 	UIKit.place(_fps_label, 1.0, 0.0, -300, 92, 280, 24)
 	var pw := VBoxContainer.new()
 	pw.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_child(pw)
-	UIKit.place(pw, 1.0, 0.0, -330, 14, 220, 140)
+	UIKit.place(pw, 1.0, 0.0, -452, 14, 220, 140)
 	_power_label = UIKit.label("Build: Pasante", 20, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
 	pw.add_child(_power_label)
 	_power_bar = _bar(Color(1.0, 0.7, 0.2), Vector2(220, 10))
@@ -189,8 +195,8 @@ func _bar(col: Color, min_size: Vector2) -> ProgressBar:
 func _on_hp(hp: float, max_hp: float, shield: float, shield_max: float) -> void:
 	_hp_bar.value = clampf(hp / maxf(max_hp, 1.0), 0.0, 1.0)
 	_hp_label.text = "%d / %d" % [int(ceil(hp)), int(max_hp)]
-	_shield_bar.visible = shield_max > 0.0
-	_shield_bar.value = clampf(shield / maxf(shield_max, 1.0), 0.0, 1.0)
+	_shield_bar.visible = shield_max > 0.0 or shield > 0.0
+	_shield_bar.value = clampf(shield / maxf(shield_max, 40.0 if shield_max <= 0.0 else 1.0), 0.0, 1.0)
 	if _last_hp >= 0.0 and hp < _last_hp - 0.5:
 		_damage_flash.color.a = clampf(0.18 + (_last_hp - hp) / maxf(max_hp, 1.0), 0.0, 0.5)
 	_last_hp = hp
@@ -211,6 +217,7 @@ func set_lobby(on: bool) -> void:
 	if _top_bg != null:
 		_top_bg.visible = not on
 	_boss_box.visible = false
+	_inv_btn.visible = not on
 
 
 func _on_objective(text: String, prog: float) -> void:
@@ -271,6 +278,8 @@ func _on_synergy(syn: Dictionary) -> void:
 func _refresh_build() -> void:
 	var b: Build = GameState.build
 	var pr := b.power_rating()
+	_inv_btn.text = "MEJ %d/%d" % [b.type_count(), Build.MAX_TYPES]
+	_inv_btn.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4) if b.is_full() else UIKit.TEXT)
 	var ti := 0
 	for i in TIERS.size():
 		if pr >= float(TIERS[i]["at"]):

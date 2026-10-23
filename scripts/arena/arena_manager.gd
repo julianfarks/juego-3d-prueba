@@ -108,6 +108,7 @@ func start(idx: int, seed_value := -1) -> Vector3:
 	chest_taken = false
 	_cleared_t = 0.0
 	GameState.arena_started.emit(idx, kind)
+	Perks.fire("arena_start", {})
 	_announce()
 	GameState.objective_changed.emit(_objective_text(), 0.0)
 	return Vector3(0, 0.3, 0)
@@ -506,6 +507,11 @@ func _complete() -> void:
 		AudioManager.play_music("combat")
 	GameState.toast_msg("¡ARENA COMPLETADA!", Color(0.5, 1.0, 0.6))
 	GameState.toast_msg("Abre el cofre y después cruza el portal", Color(1.0, 0.9, 0.4))
+	var bld: Build = GameState.build
+	var bonus := int(round(bld.s("clear_coins") + minf(float(GameState.coins) * bld.s("interest"), 40.0)))
+	if bonus > 0:
+		GameState.add_coins(bonus, false)
+	Perks.fire("arena_clear", {})
 	var heal := GameState.build.s("clear_heal")
 	if heal > 0.0 and GameState.player != null:
 		GameState.player.heal(GameState.player.max_hp * heal)

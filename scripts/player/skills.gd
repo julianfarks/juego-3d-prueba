@@ -24,6 +24,7 @@ var dodge_haste_t := 0.0
 var skill_haste_t := 0.0
 var takeover_t := 12.0
 var takeover_ready := false
+var _double_pending := false
 var barrier_hp := 0.0
 var barrier_t := 0.0
 var barrier_absorbed := 0.0
@@ -77,6 +78,10 @@ func reset() -> void:
 
 # ----------------------------------------------------------------- utilidades
 func attack_speed_mult() -> float:
+	return _attack_speed_base() + Perks.buff("haste")
+
+
+func _attack_speed_base() -> float:
 	var b: Build = GameState.build
 	var m := 1.0 + b.s("atk_speed")
 	if dodge_haste_t > 0.0:
@@ -97,11 +102,17 @@ func cd_fraction(slot: int) -> float:
 
 
 func skill_cost(slot: int) -> float:
+	var cut := 1.0 - minf(GameState.build.s("cost_cut"), 0.5)
 	match slot:
-		1: return float(Config.SKILLS["docs"]["cost"])
-		2: return float(Config.SKILLS["seal"]["cost"])
-		3: return float(Config.SKILLS["barrier"]["cost"])
+		1: return float(Config.SKILLS["docs"]["cost"]) * cut
+		2: return float(Config.SKILLS["seal"]["cost"]) * cut
+		3: return float(Config.SKILLS["barrier"]["cost"]) * cut
 	return 0.0
+
+
+## Reducción de enfriamiento efectiva de una habilidad (general + específica de esa habilidad).
+func cd_cut(key: String) -> float:
+	return minf(cdr() + GameState.build.s(key), 0.75)
 
 
 func reduce_cooldowns(seconds: float) -> void:
@@ -136,8 +147,8 @@ func _after(t: float, fn: Callable) -> void:
 # -------------------------------------------------------------------- bucle
 func update(delta: float) -> void:
 	var b: Build = GameState.build
-	energy_max = float(Config.PLAYER["energy_max"])
-	energy = minf(energy_max, energy + float(Config.PLAYER["energy_regen"]) * delta)
+	energy_max = float(Config.PLAYER["energy_max"]) + b.s("energy_max_add")
+	energy = minf(energy_max, energy + float(Config.PLAYER["energy_regen"]) * (1.0 + b.s("energy_regen_pct")) * delta)
 	_energy_kill_budget = minf(25.0, _energy_kill_budget + 25.0 * delta)
 	for i in 4:
 		if cd[i] > 0.0:
@@ -209,6 +220,7 @@ func _pay(slot: int) -> bool:
 
 func _after_secondary() -> void:
 	var b: Build = GameState.build
+	Perks.fire("skill", {})
 	if b.s("skill_haste") > 0.0:
 		skill_haste_t = 3.0
 	if b.s("energy_zone") > 0.0:
@@ -224,7 +236,7 @@ func _wp(key: String, default_value: float) -> float:
 
 func _cast_slam() -> bool:
 	var amult := attack_speed_mult()
-	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0)
+	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0) * (1.0 - minf(GameState.build.s("cd_slam"), 0.5))
 	cd[0] = cd_max[0]  # update() lo descuenta más rápido cuanta más velocidad de ataque haya
 	var dir := aim_dir()
 	player.face_dir(dir, 0.4)
@@ -246,9 +258,9 @@ func _slam_hit(dir: Vector3, mega: bool) -> void:
 		return
 	var b: Build = GameState.build
 	var base: float = float(Config.SKILLS["slam"]["dmg"]) * _wp("dmg_x", 1.0)
-	var radius: float = float(Config.SKILLS["slam"]["radius"]) * _wp("radius_x", 1.0) * Combat.area_mult()
-	var arc_deg: float = _wp("arc", float(Config.SKILLS["slam"]["arc"]))
-	var knock: float = float(Config.SKILLS["slam"]["knock"]) * _wp("knock_x", 1.0)
+	var radius: float = float(Config.SKILLS["slam"]["radius"]) * _wp("radius_x", 1.0) * Combat.area_mult() * (1.0 + b.s("slam_radius"))
+	var arc_deg: float = minf(_wp("arc", float(Config.SKILLS["slam"]["arc"])) + b.s("slam_arc"), 360.0)
+	var knock: float = float(Config.SKILLS["slam"]["knock"]) * _wp("knock_x", 1.0) * (1.0 + b.s("slam_knock"))
 	var center: Vector3 = player.global_position
 	if mega:
 		radius *= 2.0
@@ -275,6 +287,12 @@ func _slam_hit(dir: Vector3, mega: bool) -> void:
 		away.y = 0.0
 		away = away.normalized() if away.length() > 0.05 else dir
 		Combat.player_hit(e, base, {"src": "slam", "knock": away * knock, "area_hits": n, "stagger": 0.15})
+	Perks.fire("slam", {"n": n})
+	if not mega and b.s("slam_double") > 0.0 and randf() < b.s("slam_double") and not _double_pending:
+		_double_pending = true
+		_after(0.22, func():
+			_double_pending = false
+			_slam_hit(dir, false))
 	if n > 0:
 		combo_stacks = mini(combo_stacks + 1, 15)
 		combo_timer = 2.0
@@ -321,11 +339,11 @@ func _cast_docs() -> bool:
 	if not _pay(1):
 		return false
 	var b: Build = GameState.build
-	cd_max[1] = float(Config.SKILLS["docs"]["cd"]) * (1.0 - cdr())
+	cd_max[1] = float(Config.SKILLS["docs"]["cd"]) * (1.0 - cd_cut("cd_docs"))
 	cd[1] = cd_max[1]
 	var count: int = mini(int(Config.SKILLS["docs"]["count"]) + int(b.s("docs_extra")), 36)
 	var dmg: float = float(Config.SKILLS["docs"]["dmg"])
-	var speed: float = float(Config.SKILLS["docs"]["speed"])
+	var speed: float = float(Config.SKILLS["docs"]["speed"]) * (1.0 + b.s("docs_speed"))
 	var dir := aim_dir(24.0)
 	player.face_dir(dir, 0.35)
 	player.rig.play("cast", 0.45)
@@ -333,6 +351,7 @@ func _cast_docs() -> bool:
 	# objetivos: los más cercanos
 	var targets: Array = []
 	var pool := Combat.arena_enemies().duplicate()
+	pool = pool.filter(func(x): return is_instance_valid(x))
 	pool.sort_custom(func(a, c): return a.global_position.distance_squared_to(player.global_position) < c.global_position.distance_squared_to(player.global_position))
 	for e in pool:
 		if is_instance_valid(e) and e.alive and e.global_position.distance_to(player.global_position) < 26.0:
@@ -355,14 +374,15 @@ func _launch_doc(from: Vector3, d: Vector3, dmg: float, tgt: Node3D, speed: floa
 	if not player.alive or GameState.projectiles == null:
 		return
 	var origin: Vector3 = player.global_position + Vector3(0, 1.35, 0) + d * 0.7
-	GameState.projectiles.fire_doc(origin, d + Vector3(0, 0.25, 0), dmg, tgt, speed, {"src": "docs", "skill": true, "flat": true})
+	GameState.projectiles.fire_doc(origin, d + Vector3(0, 0.25, 0), dmg, tgt, speed, {"src": "docs", "skill": true, "flat": true,
+		"pierce": int(GameState.build.s("docs_pierce")), "turn_add": GameState.build.s("docs_turn")})
 
 
 func _cast_seal() -> bool:
 	if not _pay(2):
 		return false
 	var b: Build = GameState.build
-	cd_max[2] = float(Config.SKILLS["seal"]["cd"]) * (1.0 - cdr())
+	cd_max[2] = float(Config.SKILLS["seal"]["cd"]) * (1.0 - cd_cut("cd_seal"))
 	cd[2] = cd_max[2]
 	var count := 1 + int(b.s("seal_extra"))
 	var dir := aim_dir(14.0)
@@ -374,7 +394,7 @@ func _cast_seal() -> bool:
 		first = tgt.global_position
 	else:
 		first = player.global_position + dir * 4.5
-	var radius: float = float(Config.SKILLS["seal"]["radius"]) * Combat.area_mult()
+	var radius: float = float(Config.SKILLS["seal"]["radius"]) * Combat.area_mult() * (1.0 + b.s("seal_radius"))
 	for i in count:
 		var pos := first
 		if i > 0:
@@ -389,7 +409,7 @@ func _place_seal(pos: Vector3, radius: float) -> void:
 	if not player.alive:
 		return
 	var b: Build = GameState.build
-	var dur: float = float(Config.SKILLS["seal"]["duration"])
+	var dur: float = float(Config.SKILLS["seal"]["duration"]) * (1.0 + b.s("seal_time"))
 	var fxitem = null
 	if GameState.fx != null:
 		fxitem = GameState.fx.zone(pos, radius, dur, Color(0.65, 0.35, 1.0))
@@ -434,15 +454,15 @@ func _cast_barrier() -> bool:
 	if not _pay(3):
 		return false
 	var b: Build = GameState.build
-	cd_max[3] = float(Config.SKILLS["barrier"]["cd"]) * (1.0 - cdr())
+	cd_max[3] = float(Config.SKILLS["barrier"]["cd"]) * (1.0 - cd_cut("cd_barrier"))
 	cd[3] = cd_max[3]
 	player.rig.play("barrier", 0.6)
 	var radius: float = float(Config.SKILLS["barrier"]["radius"]) * Combat.area_mult()
 	var dmg: float = float(Config.SKILLS["barrier"]["dmg"])
 	var knock: float = float(Config.SKILLS["barrier"]["knock"])
 	var center: Vector3 = player.global_position
-	barrier_hp = float(Config.SKILLS["barrier"]["shield"]) * (1.0 + b.s("max_hp_pct") * 0.0) + b.s("shield_max") * 0.5
-	barrier_t = float(Config.SKILLS["barrier"]["duration"])
+	barrier_hp = (float(Config.SKILLS["barrier"]["shield"]) + b.s("shield_max") * 0.5) * (1.0 + b.s("barrier_hp_pct"))
+	barrier_t = float(Config.SKILLS["barrier"]["duration"]) * (1.0 + b.s("barrier_time"))
 	barrier_absorbed = 0.0
 	barrier_active = true
 	barrier_visual.visible = true

@@ -28,6 +28,11 @@ const CATEGORY_NAMES := {
 	"eco": "Economía y Recompensas",
 	"streak": "Rachas de Eliminaciones",
 	"risk": "Alto Riesgo / Alta Recompensa",
+	"case": "Maletín: Golpes y Ataques",
+	"docs": "Documentos y Proyectiles",
+	"ctrl": "Habilidades y Control",
+	"syn": "Sinergias entre Mejoras",
+	"legend": "Especiales y Legendarias",
 }
 
 const CATEGORY_COLORS := {
@@ -35,6 +40,8 @@ const CATEGORY_COLORS := {
 	"crit": Color(1.0, 0.55, 0.15), "hp": Color(0.95, 0.35, 0.5), "shield": Color(0.4, 0.7, 1.0),
 	"aoe": Color(0.8, 0.5, 1.0), "elem": Color(1.0, 0.5, 0.2), "combo": Color(0.3, 0.9, 1.0),
 	"eco": Color(1.0, 0.85, 0.25), "streak": Color(1.0, 0.45, 0.7), "risk": Color(0.85, 0.15, 0.2),
+	"case": Color(1.0, 0.6, 0.35), "docs": Color(0.95, 0.95, 0.7), "ctrl": Color(0.55, 0.65, 1.0),
+	"syn": Color(0.4, 1.0, 0.8), "legend": Color(1.0, 0.75, 0.2),
 }
 
 ## Límites duros de ciertas estadísticas para evitar builds rotas (por encima = inútil).
@@ -43,6 +50,11 @@ const CAPS := {
 	"slow_chance": 0.8, "burn_chance": 0.9, "chain_chance": 0.7, "freeze_chance": 0.3,
 	"mark_chance": 0.7, "dodge_cd": 0.6, "move_speed": 1.0, "shop_discount": 0.5,
 	"aoe_pct": 1.5, "crit_mult": 6.0, "crit_explosion": 5.0,
+	"hp_regen_pct": 0.05, "heal_pow": 1.5, "armor_low": 0.3, "iframe_add": 0.4, "dodge_speed": 1.0, "hurt_iframe_add": 0.4,
+	"shield_regen_pct": 3.0, "shield_delay_cut": 0.6, "jump_pow": 0.6, "lifesteal": 0.12, "cd_docs": 0.6, "cd_seal": 0.6,
+	"cd_barrier": 0.6, "cd_slam": 0.5, "docs_pierce": 6.0, "docs_speed": 1.5, "docs_turn": 12.0, "cost_cut": 0.5,
+	"slam_double": 0.6, "burn_spread": 0.8, "slow_amt": 0.35, "reroll_cut": 0.6, "exec_thr": 0.24, "slam_arc": 200.0, "kill_coins": 0.5,
+	"explosion_pow": 3.0, "explo_rad": 1.2, "slam_radius": 1.0, "seal_radius": 1.5, "knock_pow": 3.0,
 }
 
 ## Máximo de niveles de cualquier mejora y separación entre hitos (multiplicadores extra por cada 10 niveles).
@@ -74,12 +86,25 @@ static func _u(id: String, uname: String, cat: String, icon: String, desc: Strin
 	var d := {
 		"id": id, "name": uname, "cat": cat, "icon": icon, "desc": desc,
 		"stats": stats, "fmt": fmt,
-		"max": 6, "flat": false, "rarities": [0, 1, 2, 3],
+		"max": 6, "flat": false, "rarities": [0, 1, 2, 3], "tags": [], "req": {},
 	}
 	for k in extra.keys():
 		d[k] = extra[k]
 	_defs.append(d)
 	_by_id[id] = d
+
+
+## Alta compacta para el catálogo generado: 'fmt' = una letra de formato por estadística (en orden).
+static func add_def(id: String, uname: String, cat: String, icon: String, desc: String, stats: Dictionary, fmt: String, mx: int, tags: Array, extra: Dictionary = {}) -> void:
+	var f := {}
+	var i := 0
+	for k in stats.keys():
+		f[k] = fmt[i] if i < fmt.length() else "n"
+		i += 1
+	var e := {"max": mx, "tags": tags}
+	for k in extra.keys():
+		e[k] = extra[k]
+	_u(id, uname, cat, icon, desc, stats, f, e)
 
 
 static func _ensure() -> void:
@@ -127,7 +152,7 @@ static func _ensure() -> void:
 	_u("hot_ink", "Tinta Hirviente", "elem", "flame", "{burn_chance} de incendiar ({burn_dps} daño/s)", {"burn_chance": 0.06, "burn_dps": 5.0}, {"burn_chance": "p", "burn_dps": "i"}, {"max": 20, "mile": {"burn_dps": 6.0}})
 	_u("frozen_assets", "Activos Congelados", "elem", "snow", "{slow_chance} de ralentizar un 45% (y {freeze_chance} de congelar)", {"slow_chance": 0.08, "freeze_chance": 0.006}, {"slow_chance": "p", "freeze_chance": "p"}, {"max": 15})
 	_u("static_objection", "Objeción Estática", "elem", "zap", "{chain_chance} de rayo en cadena (+{chain_count} saltos)", {"chain_chance": 0.06, "chain_count": 0.5}, {"chain_chance": "p", "chain_count": "n"}, {"max": 15})
-	_u("corrosive", "Cláusula Corrosiva", "elem", "drop", "{mark_chance} de marcar: el objetivo recibe +25% de daño", {"mark_chance": 0.07}, {"mark_chance": "p"}, {"max": 12})
+	_u("corrosive", "Cláusula Corrosiva", "elem", "drop", "{mark_chance} de marcar: el objetivo recibe +25% de daño", {"mark_chance": 0.07}, {"mark_chance": "p"}, {"max": 10})
 	# ---------------------------------------------------------- COMBINACIONES
 	_u("paper_storm", "Tormenta de Papel", "combo", "paper", "Documentos teledirigidos: +{docs_extra} documento(s)", {"docs_extra": 1.0}, {"docs_extra": "i"}, {"max": 12, "flat": true, "mile": {"docs_extra": 2.0}})
 	_u("twin_seal", "Sello Gemelo", "combo", "seal", "Sello Mágico: +{seal_extra} sello(s) adicional(es)", {"seal_extra": 1.0}, {"seal_extra": "i"}, {"max": 4, "flat": true})
@@ -152,6 +177,11 @@ static func _ensure() -> void:
 	_u("all_in", "Todo o Nada", "risk", "spade", "Prob. de crítico +{crit_chance}, pero tus golpes no críticos hacen -{noncrit_malus}", {"crit_chance": 0.2, "noncrit_malus": 0.25}, {"crit_chance": "p", "noncrit_malus": "p"}, {"max": 3, "rarities": [1, 2, 3]})
 	_u("blood_pact", "Conflicto de Intereses", "risk", "pact", "Tus habilidades secundarias cuestan {skill_hp_cost} de salud pero hacen ×{skill_dmg_x}", {"skill_hp_cost": 3.0, "skill_dmg_x": 0.45}, {"skill_hp_cost": "i", "skill_dmg_x": "m"}, {"max": 3, "rarities": [1, 2, 3]})
 	_u("hostile_takeover", "Adquisición Hostil", "risk", "crown", "Cada 12 s tu próximo golpe es una MEGA onda ({takeover} del daño)", {"takeover": 6.0}, {"takeover": "p"}, {"max": 3, "rarities": [3]})
+	# ------------------------------------------------- catálogo ampliado (datos generados)
+	for id in UpgradeCatalog.EXISTING_TAGS.keys():
+		if _by_id.has(id):
+			_by_id[id]["tags"] = UpgradeCatalog.EXISTING_TAGS[id]
+	UpgradeCatalog.register()
 
 
 # ---------------------------------------------------------------- SINERGIAS
@@ -182,6 +212,18 @@ static func synergies() -> Array:
 		{"id": "chain_of_command", "name": "Cadena de Mando", "desc": "Rayo 6 + Onda 6 + Tinta 6: +2 saltos de rayo y +20% de incendiar.", "needs": {}, "lv": {"static_objection": 6, "echo_wave": 6, "hot_ink": 6}, "gives": {"chain_count": 2.0, "burn_chance": 0.2}},
 		{"id": "iron_wall", "name": "Muro de Jurisprudencia", "desc": "Inmunidad 10 + Chaleco 8 + Seguro 10: +8% de reducción, +50 de escudo y +4 de regeneración.", "needs": {}, "lv": {"immunity": 10, "vest": 8, "health_plan": 10}, "gives": {"armor": 0.08, "shield_max": 50.0, "regen": 4.0}},
 		{"id": "heavy_artillery", "name": "Artillería Pesada", "desc": "Maletín Bumerán + Barrido Amplio: el bumerán es gigante y ×1.4 de daño.", "needs": {"boomerang": 0.01, "aoe_pct": 0.2}, "gives": {"syn_big_boomerang": 1.0}},
+		# --- sinergias por ETIQUETA ("tags": etiqueta -> nº de tipos distintos de mejora con esa etiqueta).
+		{"id": "tag_fire", "name": "Pirómano Legal", "desc": "4 mejoras de fuego: +25% de incendiar y ×1.2 de daño.", "needs": {}, "tags": {"fuego": 4}, "gives": {"burn_chance": 0.25, "more_dmg_x": 0.2}},
+		{"id": "tag_ice", "name": "Cámara Frigorífica", "desc": "3 mejoras de hielo: +25% de ralentizar y +15% de congelar.", "needs": {}, "tags": {"hielo": 3}, "gives": {"slow_chance": 0.25, "freeze_chance": 0.15}},
+		{"id": "tag_bolt", "name": "Red Eléctrica", "desc": "3 mejoras de rayo: +3 saltos de cadena y +20% de cadena.", "needs": {}, "tags": {"rayo": 3}, "gives": {"chain_count": 3.0, "chain_chance": 0.2}},
+		{"id": "tag_crit", "name": "Tribunal Supremo", "desc": "4 mejoras de crítico: +15% de crítico y +0.5 de multiplicador crítico.", "needs": {}, "tags": {"critico": 4}, "gives": {"crit_chance": 0.15, "crit_mult": 0.5}},
+		{"id": "tag_boom", "name": "Demolición Controlada", "desc": "4 mejoras de explosión: +25% de radio y ×1.25 de daño.", "needs": {}, "tags": {"explosion": 4}, "gives": {"aoe_pct": 0.25, "more_dmg_x": 0.25}},
+		{"id": "tag_docs", "name": "Archivo General", "desc": "4 mejoras de documentos: +2 documentos y ×1.25 de daño de habilidades.", "needs": {}, "tags": {"docs": 4}, "gives": {"docs_extra": 2.0, "skill_dmg_x": 0.25}},
+		{"id": "tag_shield", "name": "Fortaleza Jurídica", "desc": "5 mejoras de escudo: +60 de escudo y +10% de reducción de daño.", "needs": {}, "tags": {"escudo": 5}, "gives": {"shield_max": 60.0, "armor": 0.1}},
+		{"id": "tag_case", "name": "Arsenal de Maletines", "desc": "5 mejoras de maletín: ×1.3 de daño y +15% de radio.", "needs": {}, "tags": {"maletin": 5}, "gives": {"more_dmg_x": 0.3, "aoe_pct": 0.15}},
+		{"id": "tag_streak", "name": "Imparable", "desc": "4 mejoras de racha: +15% de velocidad de ataque y ×1.2 de daño.", "needs": {}, "tags": {"racha": 4}, "gives": {"atk_speed": 0.15, "more_dmg_x": 0.2}},
+		{"id": "tag_ctrl", "name": "Orden en la Sala", "desc": "4 mejoras de control: +20% de aturdir/ralentizar y +10% de reducción de daño.", "needs": {}, "tags": {"control": 4}, "gives": {"slow_chance": 0.2, "armor": 0.1}},
+		{"id": "tag_money", "name": "Bufete Próspero", "desc": "5 mejoras de monedas: +15% de descuento en tienda y +1 moneda por baja.", "needs": {}, "tags": {"monedas": 5}, "gives": {"shop_discount": 0.15, "kill_coins": 1.0}},
 	]
 	return _syn_cache
 
@@ -203,7 +245,18 @@ static func rarity_scale(def: Dictionary, rarity: int) -> float:
 	return RARITY_MULT[rarity]
 
 
-## Texto de la carta con los valores concretos según la rareza.
+static func fmt_value(letter: String, v: float) -> String:
+	match letter:
+		"p": return "%d%%" % int(round(v * 100.0))
+		"pm": return "%d%%" % int(round(absf(v) * 100.0))
+		"q": return "%.1f%%" % (v * 100.0)
+		"m": return "%.2f" % (1.0 + v)
+		"i": return "%d" % int(round(v))
+		"s": return "%.2f" % v
+	return "%.1f" % v
+
+
+## Texto de la carta con los valores concretos según la rareza ({clave}, {v} = 1.ª estadística, {w} = 2.ª).
 static func describe(id: String, rarity: int) -> String:
 	var d := get_def(id)
 	if d.is_empty():
@@ -212,17 +265,15 @@ static func describe(id: String, rarity: int) -> String:
 	var sc := rarity_scale(d, rarity)
 	var stats: Dictionary = d["stats"]
 	var fmt: Dictionary = d["fmt"]
+	var n := 0
 	for key in fmt.keys():
-		var v := float(stats.get(key, 0.0)) * sc
-		var out := ""
-		match String(fmt[key]):
-			"p": out = "%d%%" % int(round(v * 100.0))
-			"pm": out = "%d%%" % int(round(absf(v) * 100.0))
-			"m": out = "%.2f" % (1.0 + v)
-			"i": out = "%d" % int(round(v))
-			"s": out = "%.2f" % v
-			_: out = "%.1f" % v
+		var out := fmt_value(String(fmt[key]), float(stats.get(key, 0.0)) * sc)
 		txt = txt.replace("{%s}" % key, out)
+		if n == 0:
+			txt = txt.replace("{v}", out)
+		elif n == 1:
+			txt = txt.replace("{w}", out)
+		n += 1
 	# marcadores auxiliares
 	txt = txt.replace("{hp_malus}", "%d%%" % int(round(absf(float(stats.get("max_hp_pct", 0.0))) * sc * 100.0)))
 	txt = txt.replace("{noncrit_malus}", "%d%%" % int(round(float(stats.get("noncrit_malus", 0.0)) * sc * 100.0)))
@@ -245,15 +296,64 @@ static func milestones_at(level: int) -> int:
 
 
 ## ¿Sigue aportando algo? Falso si ya está al nivel máximo o su estadística principal ya tocó su límite duro.
-static func is_offerable(d: Dictionary, build: Build) -> bool:
+static func is_offerable(d: Dictionary, build: Build, depth := 0) -> bool:
 	if build == null:
 		return true
-	if build.count_of(d["id"]) >= mini(int(d["max"]), MAX_LEVEL):
+	if build.count_of(d["id"]) >= mini(int(d["max"]), UpgradeDB.MAX_LEVEL):
+		return false
+	# inventario lleno: solo se ofrecen las que ya tienes
+	if build.count_of(d["id"]) == 0 and build.is_full():
 		return false
 	var first_key := String((d["stats"] as Dictionary).keys()[0])
 	if CAPS.has(first_key) and float((d["stats"] as Dictionary)[first_key]) > 0.0 and build.s(first_key) >= float(CAPS[first_key]) - 0.0005:
 		return false
+	return requirements_met(d, build, depth)
+
+
+## Requisitos y restricciones de aparición: arena mínima, mejoras/etiquetas previas y compatibilidad con el equipo.
+static func requirements_met(d: Dictionary, build: Build, depth := 0) -> bool:
+	var req: Dictionary = d.get("req", {})
+	if req.is_empty():
+		return true
+	if depth < int(req.get("arena", 0)):
+		return false
+	if req.has("owns"):
+		var ok := false
+		for oid in req["owns"]:
+			if build != null and build.count_of(oid) > 0:
+				ok = true
+		if not ok:
+			return false
+	if req.has("tag"):
+		for tg in (req["tag"] as Dictionary).keys():
+			var n := 0
+			if build != null:
+				for oid2 in build.counts.keys():
+					if oid2 != d["id"] and (get_def(oid2).get("tags", []) as Array).has(tg):
+						n += 1
+			if n < int(req["tag"][tg]):
+				return false
+	var equipped := _equipped_ids()
+	if req.has("equip_any"):
+		var any := false
+		for e in req["equip_any"]:
+			if equipped.has(e):
+				any = true
+		if not any:
+			return false
+	if req.has("not_equip"):
+		for e2 in req["not_equip"]:
+			if equipped.has(e2):
+				return false
 	return true
+
+
+static func _equipped_ids() -> Array:
+	var out: Array = []
+	if GameState != null and GameState.loadout is Dictionary:
+		for slot in (GameState.loadout as Dictionary).keys():
+			out.append(String(GameState.loadout[slot]))
+	return out
 
 
 ## Nombre de la sinergia inactiva que esta mejora ayudaría a completar (si ya llevas alguna otra pieza).
@@ -286,7 +386,8 @@ static func _pick_weight(d: Dictionary, build: Build, equipped: Array) -> float:
 	var w := 1.0
 	var id: String = d["id"]
 	if build != null and build.count_of(id) > 0:
-		w *= 1.6        # profundizar una build ya empezada tiene que ser tentador
+		# profundizar una build ya empezada tiene que ser tentador; las que más has subido salen más
+		w *= 1.6 + minf(float(build.count_of(id)), 30.0) * 0.05
 	for item in equipped:
 		if (EQUIP_AFFINITY.get(item, []) as Array).has(id):
 			w *= 2.2
@@ -308,14 +409,19 @@ static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: R
 	if GameState != null and GameState.loadout is Dictionary:
 		for slot in (GameState.loadout as Dictionary).keys():
 			equipped.append(String(GameState.loadout[slot]))
+	# la lista de ofrecibles se calcula UNA vez por cofre (con 240+ mejoras evita recalcular los requisitos por carta)
+	var wcache := {}
+	var offerable: Array = []
+	for d in _defs:
+		if is_offerable(d, build, depth):
+			offerable.append(d)
 	for i in count:
 		var force_min := min_rarity if i == 0 else 0
 		var rarity := _roll_rarity(luck, depth, rng, force_min)
 		var pool: Array = []
-		for d in _defs:
-			if used.has(d["id"]) or not is_offerable(d, build):
-				continue
-			pool.append(d)
+		for d in offerable:
+			if not used.has(d["id"]):
+				pool.append(d)
 		if pool.is_empty():
 			break
 		var allowed: Array = []
@@ -339,7 +445,9 @@ static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: R
 		var total := 0.0
 		var ws: Array = []
 		for d in allowed:
-			var w := _pick_weight(d, build, equipped)
+			if not wcache.has(d["id"]):
+				wcache[d["id"]] = _pick_weight(d, build, equipped)
+			var w: float = wcache[d["id"]]
 			ws.append(w)
 			total += w
 		var r := rng.randf() * total
@@ -381,12 +489,37 @@ static func _with_pick(picks: Array, id: String, rarity: int) -> Array:
 
 
 static func _fmt_stat(key: String, v: float, f: String) -> String:
-	var label := String(STAT_LABELS.get(key, key))
-	match f:
-		"p", "pm": return "%s %d%%" % [label, int(round(v * 100.0))]
-		"m": return "%s ×%.2f" % [label, v]
-		"i": return "%s %d" % [label, int(round(v))]
-		_: return "%s %.1f" % [label, v]
+	var label := stat_label(key)
+	if f == "m":
+		return "%s ×%.2f" % [label, v]
+	return "%s %s" % [label, fmt_value(f, v)]
+
+
+const EVENT_NAMES := {"hit": "Al golpear", "crit": "Al crítico", "kill": "Al eliminar", "slam": "Al golpe de maletín", "skill": "Al usar habilidad",
+	"dodge": "Al esquivar", "hurt": "Al recibir daño", "shield_break": "Al romperse el escudo", "arena_clear": "Al limpiar arena", "arena_start": "Al empezar arena",
+	"levelup": "Al subir de nivel", "t3": "Cada 3 s", "t5": "Cada 5 s", "t8": "Cada 8 s", "t12": "Cada 12 s"}
+const EFFECT_NAMES := {"heal_pct": "curar", "heal_flat": "curar", "shield": "escudo", "energy": "Expediente", "cdr": "enfriamientos", "buff_dmg": "daño temporal",
+	"buff_haste": "prisa de ataque", "buff_speed": "velocidad temporal", "buff_armor": "armadura temporal", "buff_crit": "crítico temporal", "nova": "explosión",
+	"nova_at": "explosión en objetivo", "chain": "rayo", "burn_area": "incendio", "slow_area": "ralentizar", "freeze_area": "congelar", "mark_area": "marcar",
+	"stun_area": "aturdir", "coins": "monedas", "xp": "experiencia", "missile": "documentos", "pull": "atraer", "push": "empujar", "invuln": "invulnerabilidad",
+	"reset_dodge": "reiniciar esquiva", "boomerang": "bumerán"}
+const COND_NAMES := {"burning": "en llamas", "slowed": "ralentizados", "frozen": "congelados", "marked": "marcados", "full": "salud alta", "wounded": "heridos",
+	"far": "lejanos", "near": "cercanos", "crowd": "grupo", "alone": "objetivo único", "lowhp": "tu salud baja", "fullhp": "tu salud alta", "shield": "con escudo",
+	"barrier": "con Objeción", "hasted": "con prisa", "moving": "en movimiento", "still": "quieto", "air": "en el aire", "streak": "racha", "combo": "combo",
+	"energy": "Expediente lleno", "rich": "con monedas", "boss_arena": "arena de jefe"}
+
+
+## Nombre legible de una clave de estadística, incluidas las de disparadores (t:), condiciones (c:) y fuentes (s:).
+static func stat_label(key: String) -> String:
+	if key.begins_with("t:"):
+		var p := key.split(":")
+		if p.size() == 3:
+			return "%s: %s" % [EVENT_NAMES.get(p[1], p[1]), EFFECT_NAMES.get(p[2], p[2])]
+	if key.begins_with("c:"):
+		return "Daño (%s)" % COND_NAMES.get(key.substr(2), key.substr(2))
+	if key.begins_with("s:"):
+		return "Daño de %s" % key.substr(2)
+	return String(STAT_LABELS.get(key, key))
 
 
 const STAT_LABELS := {
@@ -401,6 +534,17 @@ const STAT_LABELS := {
 	"boomerang": "Bumerán", "energy_zone": "Zona", "coin_pct": "Monedas", "passive_coins": "Monedas/s", "luck": "Suerte", "shop_discount": "Descuento",
 	"xp_pct": "Experiencia", "kill_nova": "Descarga", "streak_dmg": "Racha", "kill_speed": "Prisa/baja", "nth_kill_nova": "Explosión 10.ª",
 	"kill_energy": "Energía/baja", "skill_dmg_x": "Habilidades",
+	"hp_regen_pct": "Regen. %", "heal_pow": "Curación", "armor_low": "Armadura (vida baja)", "iframe_add": "Invuln. esquiva", "dodge_speed": "Vel. esquiva",
+	"hurt_iframe_add": "Invuln. tras golpe", "shield_regen_pct": "Regen. escudo", "shield_delay_cut": "Retardo escudo", "jump_pow": "Salto", "max_hp_flat": "Salud plana",
+	"lifesteal": "Robo de vida", "magnet": "Imán", "cd_docs": "Enfr. documentos", "cd_seal": "Enfr. sello", "cd_barrier": "Enfr. objeción", "cd_slam": "Enfr. maletín",
+	"docs_pierce": "Perforación", "docs_speed": "Vel. documentos", "docs_turn": "Teledirección", "seal_radius": "Radio sello", "seal_time": "Duración sello",
+	"barrier_hp_pct": "Resist. objeción", "barrier_time": "Duración objeción", "energy_max_add": "Expediente máx.", "energy_regen_pct": "Regen. expediente",
+	"cost_cut": "Coste habilidades", "slam_radius": "Radio maletín", "slam_arc": "Arco maletín", "slam_knock": "Empuje maletín", "slam_double": "Doble golpe",
+	"knock_pow": "Empuje", "stagger_add": "Aturdimiento", "exec_thr": "Umbral ejecución", "explosion_pow": "Daño explosiones", "explo_rad": "Radio explosiones",
+	"burn_dur": "Duración fuego", "slow_dur": "Duración frío", "freeze_dur": "Duración hielo", "mark_amp": "Marca extra", "mark_dur": "Duración marca",
+	"chain_dmg": "Daño rayo", "burn_spread": "Contagio", "chest_cards": "Cartas extra", "reroll_cut": "Relanzar", "skip_bonus": "Descarte", "sell_bonus": "Venta",
+	"clear_coins": "Monedas/arena", "interest": "Interés", "kill_coins": "Monedas/baja", "xp_kill": "XP/baja", "epic_luck": "Fortuna épica", "boss_coins": "Botín jefe",
+	"slow_amt": "Ralentización",
 }
 
 
@@ -408,7 +552,7 @@ static func mile_text(d: Dictionary) -> String:
 	var parts: Array = []
 	for key in (d["mile"] as Dictionary).keys():
 		var v := float(d["mile"][key])
-		var label := String(STAT_LABELS.get(key, key))
+		var label := stat_label(String(key))
 		if String(key).ends_with("_x"):
 			parts.append("%s ×%.2f" % [label, 1.0 + v])
 		elif v < 5.0:
@@ -420,9 +564,10 @@ static func mile_text(d: Dictionary) -> String:
 
 static func _roll_rarity(luck: float, depth: int, rng: RandomNumberGenerator, min_rarity: int) -> int:
 	var w := RARITY_WEIGHT.duplicate()
+	var el: float = GameState.build.s("epic_luck") if GameState != null and GameState.build != null else 0.0
 	w[1] *= 1.0 + luck * 1.0 + depth * 0.02
-	w[2] *= 1.0 + luck * 2.0 + depth * 0.05
-	w[3] *= 1.0 + luck * 3.0 + depth * 0.08
+	w[2] *= 1.0 + luck * 2.0 + depth * 0.05 + el
+	w[3] *= 1.0 + luck * 3.0 + depth * 0.08 + el * 1.5
 	for i in min_rarity:
 		w[i] = 0.0
 	var total := 0.0

@@ -69,23 +69,24 @@ static func calc(enemy: Node3D, base: float, opts: Dictionary) -> Dictionary:
 	pct += streak * b.s("streak_dmg")
 	pct += (minf(float(opts.get("area_hits", 1)) - 1.0, 10.0)) * b.s("crowd_dmg") if b.s("crowd_dmg") > 0.0 else 0.0
 	pct += b.s("move_speed") * b.s("speed_to_dmg")
-	if enemy.hp_frac() < 0.35:
+	if enemy.hp_frac() < 0.35 + b.s("exec_thr"):
 		pct += b.s("execute_pct")
 	if enemy.is_elite or enemy.is_boss:
 		pct += b.s("boss_dmg")
+	pct += Perks.damage_bonus(enemy, opts)          # condiciones (c:), fuentes (s:) y buffs temporales
 	dmg *= maxf(0.1, 1.0 + pct)
 	dmg *= b.s("more_dmg_x")
 	if b.has_synergy("war_machine") and GameState.kill_streak > 0:
 		dmg *= 1.3
 	if enemy.marked_t > 0.0:
-		dmg *= 1.25
+		dmg *= 1.25 + b.s("mark_amp")
 	if enemy.slow_t > 0.0 and b.s("syn_cold_zone") > 0.0:
 		dmg *= 1.25
 	if opts.get("skill", false):
 		dmg *= b.s("skill_dmg_x")
 	var crit := false
 	if not opts.get("no_crit", false):
-		var cc := 0.05 + b.s("crit_chance")
+		var cc := 0.05 + b.s("crit_chance") + Perks.buff("crit")
 		crit = opts.get("force_crit", false) or randf() < cc
 	if crit:
 		dmg *= 1.75 + b.s("crit_mult")
@@ -104,14 +105,20 @@ static func player_hit(enemy: Node3D, base: float, opts: Dictionary) -> bool:
 	var crit: bool = r["crit"]
 	var info := {
 		"crit": crit, "src": opts.get("src", "slam"),
-		"knock": opts.get("knock", Vector3.ZERO), "element": opts.get("element", "phys"),
-		"stagger": opts.get("stagger", 0.0),
+		"knock": (opts.get("knock", Vector3.ZERO) as Vector3) * (1.0 + b.s("knock_pow")), "element": opts.get("element", "phys"),
+		"stagger": float(opts.get("stagger", 0.0)) + (b.s("stagger_add") if float(opts.get("stagger", 0.0)) > 0.0 else 0.0),
 	}
 	GameState.run_stats["highest_hit"] = maxf(float(GameState.run_stats["highest_hit"]), dmg)
 	if crit:
 		GameState.run_stats["crits"] += 1
 	var killed: bool = enemy.take_damage(dmg, info)
 	var proc: bool = opts.get("proc", true)
+	if b.s("lifesteal") > 0.0 and GameState.player != null:
+		GameState.player.heal_limited(dmg * b.s("lifesteal"))
+	if proc:
+		Perks.fire("hit", {"enemy": enemy, "dmg": dmg})
+		if crit:
+			Perks.fire("crit", {"enemy": enemy, "dmg": dmg})
 	if proc and not killed and enemy.alive:
 		_apply_procs(enemy, dmg, crit, opts)
 	if crit and proc:
@@ -125,15 +132,15 @@ static func player_hit(enemy: Node3D, base: float, opts: Dictionary) -> bool:
 static func _apply_procs(enemy: Node3D, dmg: float, crit: bool, opts: Dictionary) -> void:
 	var b: Build = GameState.build
 	if b.s("burn_chance") > 0.0 and randf() < b.s("burn_chance") + (0.0 if not opts.get("force_burn", false) else 1.0):
-		enemy.apply_burn(b.s("burn_dps") * (1.0 + b.s("dmg_pct") * 0.5), 3.0)
+		enemy.apply_burn(b.s("burn_dps") * (1.0 + b.s("dmg_pct") * 0.5), 3.0 * (1.0 + b.s("burn_dur")))
 	if b.s("slow_chance") > 0.0 and randf() < b.s("slow_chance"):
-		enemy.apply_slow(0.45, 2.5)
+		enemy.apply_slow(minf(0.45 + b.s("slow_amt"), 0.8), 2.5 * (1.0 + b.s("slow_dur")))
 	if b.s("freeze_chance") > 0.0 and randf() < b.s("freeze_chance") and not enemy.is_boss:
-		enemy.apply_freeze(1.1)
+		enemy.apply_freeze(1.1 * (1.0 + b.s("freeze_dur")))
 	if b.s("mark_chance") > 0.0 and randf() < b.s("mark_chance"):
-		enemy.apply_mark(4.0)
+		enemy.apply_mark(4.0 * (1.0 + b.s("mark_dur")))
 	if b.s("chain_chance") > 0.0 and randf() < b.s("chain_chance"):
-		chain_lightning(enemy, dmg * 0.55, 2 + int(b.s("chain_count")))
+		chain_lightning(enemy, dmg * (0.55 + b.s("chain_dmg")), 2 + int(b.s("chain_count")))
 
 
 static func _crit_effects(enemy: Node3D, dmg: float, opts: Dictionary) -> void:
@@ -149,6 +156,8 @@ static func _crit_effects(enemy: Node3D, dmg: float, opts: Dictionary) -> void:
 
 ## Explosión de área (daño directo, sin críticos propios para no desbalancear).
 static func explode(pos: Vector3, radius: float, damage: float, opts: Dictionary = {}) -> void:
+	radius *= 1.0 + GameState.build.s("explo_rad")
+	damage *= 1.0 + GameState.build.s("explosion_pow")
 	var fx = GameState.fx
 	if fx != null:
 		fx.ring(pos, radius, Color(1.0, 0.7, 0.2, 0.85), 0.35, 0.3)
@@ -213,6 +222,17 @@ static func on_kill(enemy: Node3D, info: Dictionary) -> void:
 	if b.s("kill_speed") > 0.0:
 		player.kill_speed_t = 2.0
 	var src: String = info.get("src", "")
+	Perks.fire("kill", {"enemy": enemy})
+	if b.s("burn_spread") > 0.0 and enemy.burn_t > 0.0 and randf() < b.s("burn_spread"):
+		for e2 in enemies_in_radius(enemy.global_position, 4.5):
+			if e2 != enemy:
+				e2.apply_burn(b.s("burn_dps") + 6.0, 3.0)
+	if b.s("kill_coins") > 0.0 and randf() < b.s("kill_coins"):
+		GameState.add_coins(1, false)
+	if b.s("xp_kill") > 0.0:
+		GameState.add_xp(b.s("xp_kill"))
+	if b.s("boss_coins") > 0.0 and enemy.is_boss:
+		GameState.add_coins(int(round(60.0 * b.s("boss_coins"))), false)
 	if b.s("kill_nova") > 0.0 and _nova_depth < 3:
 		_nova_depth += 1
 		var base: float = float(Config.SKILLS["slam"]["dmg"]) * b.s("kill_nova")

@@ -321,6 +321,7 @@ func add_xp(amount: float) -> void:
 		build.level = level
 		build.recompute(false)
 		level_up.emit(level)
+		Perks.fire("levelup", {})
 		AudioManager.sfx("levelup")
 		toast.emit("¡Nivel de caso %d!" % (level + 1), Color(1, 0.85, 0.3))
 

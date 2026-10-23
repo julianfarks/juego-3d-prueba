@@ -114,7 +114,8 @@ func fire_doc(from: Vector3, dir: Vector3, dmg: float, target: Node3D, speed: fl
 	p.vel = dir.normalized() * speed
 	p.dmg = dmg
 	p.target = target
-	p.turn = 7.0
+	p.turn = 7.0 + float(opts.get("turn_add", 0.0))
+	p.pierce = int(opts.get("pierce", 0))
 	p.life = 3.0
 	p.radius = 0.55
 	p.opts = opts

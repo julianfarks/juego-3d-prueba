@@ -65,6 +65,14 @@ func _ready() -> void:
 			add_child(lnode)
 			lnode.set("main", self)
 		return
+	if Config.cmd_flag("--invtest"):
+		var it := load("res://tests/invtest.gd")
+		if it != null:
+			var inode: Node = it.new()
+			inode.name = "InvTest"
+			add_child(inode)
+			inode.set("main", self)
+		return
 	if Config.cmd_flag("--flowtest"):
 		var ft := load("res://tests/flowtest.gd")
 		if ft != null:
@@ -122,6 +130,7 @@ func _build_ui() -> void:
 	hud = HUD.new()
 	hud.visible = false
 	hud.pause_pressed.connect(_toggle_pause)
+	hud.inventory_pressed.connect(_open_inventory)
 	theme_root.add_child(hud)
 	touch = TouchControls.new()
 	touch.visible = false
@@ -197,6 +206,26 @@ func _open_overlay(n: Control) -> void:
 		_overlays.erase(n)
 		if _overlays.is_empty() and state != St.ENDED:
 			get_tree().paused = false)
+
+
+## Inventario de mejoras (botón del HUD, pausa y cofres). Se apila sobre cualquier otro panel.
+func _open_inventory() -> void:
+	if state != St.RUN or _transitioning:
+		return
+	for o in _overlays:
+		if o is InventoryUI:
+			return
+	_open_overlay(InventoryUI.new())
+
+
+func _open_inventory_over(cs: CardSelect) -> void:
+	var inv := InventoryUI.new()
+	var changed := [false]
+	inv.changed.connect(func(): changed[0] = true)
+	inv.tree_exited.connect(func():
+		if is_instance_valid(cs):
+			cs.on_inventory_closed(changed[0]))
+	_open_overlay(inv)
 
 
 func _fade_to(a: float, t := 0.25) -> void:
@@ -606,6 +635,7 @@ func _open_cards(min_rarity: int, second: bool) -> void:
 			_open_cards(maxi(min_rarity - 1, 0), false)
 		else:
 			_autosave("portal"))
+	cs.inventory_requested.connect(func(): _open_inventory_over(cs))
 	_open_overlay(cs)
 	cs.open(GameState.arena_index, min_rarity, "chest")
 

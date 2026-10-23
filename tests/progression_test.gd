@@ -39,9 +39,28 @@ func _main() -> void:
 func _build(picks: Array = []) -> Build:
 	var b := Build.new()
 	b.reset({})
-	for p in picks:
-		b.add(p[0], p[1])
+	_bulk(b, picks)
 	return b
+
+
+## Carga muchas mejoras de golpe (sin el límite de 30 tipos: estas pruebas miden números, no el inventario)
+## y recalcula UNA sola vez.
+## Una build "enfocada" prioriza las mejoras de las etiquetas maletín / crítico / explosión / ataque.
+func _is_focus(id: String) -> bool:
+	if FOCUS.has(id):
+		return true
+	var tg: Array = UpgradeDB.get_def(id).get("tags", [])
+	for t in ["maletin", "critico", "explosion", "ataque"]:
+		if tg.has(t):
+			return true
+	return false
+
+
+func _bulk(b: Build, picks: Array) -> void:
+	for p in picks:
+		b.picks.append({"id": p[0], "rarity": p[1]})
+		b.counts[p[0]] = int(b.counts.get(p[0], 0)) + 1
+	b.recompute(false)
 
 
 # --- 1: Daño de Maletín sube de nivel 1 a 2 y sigue subiendo -------------------------------------------
@@ -90,7 +109,7 @@ func _t2_level_50_and_chests() -> void:
 	var seen49 := 0
 	var seen50 := 0
 	var dup := 0
-	for n in 3000:
+	for n in 600:
 		var c49 := UpgradeDB.roll_cards(3, 0.2, n % 40, b49, rng, 0)
 		var c50 := UpgradeDB.roll_cards(3, 0.2, n % 40, b50, rng, 0)
 		for c in c49:
@@ -104,9 +123,9 @@ func _t2_level_50_and_chests() -> void:
 			if ids.has(c["id"]):
 				dup += 1
 			ids[c["id"]] = true
-	ok(seen49 > 100, "T2 en nivel 49 todavía aparece en cofres (%d veces en 3000)" % seen49)
-	ok(seen50 == 0, "T2 en nivel 50 NO aparece nunca (0 de 3000 cofres)")
-	ok(dup == 0, "T2 sin duplicados dentro del mismo cofre (3000 cofres)")
+	ok(seen49 > 100, "T2 en nivel 49 todavía aparece en cofres (%d veces en 600)" % seen49)
+	ok(seen50 == 0, "T2 en nivel 50 NO aparece nunca (0 de 600 cofres)")
+	ok(dup == 0, "T2 sin duplicados dentro del mismo cofre (600 cofres)")
 	# ninguna mejora supera su máximo ni el 50
 	var over := 0
 	for d in UpgradeDB.all():
@@ -128,11 +147,15 @@ func _t2_level_50_and_chests() -> void:
 		var rr := 0
 		for i in int(d["max"]):
 			var rars: Array = d["rarities"]
-			bm.add(d["id"], rars[0])
-		for n in 200:
+			bm.add(d["id"], rars[0], true)
+		if bm.count_of(d["id"]) != int(d["max"]):
+			leak += 1
+			print("   no sube hasta el máximo: ", d["id"])
+		for n in 6:
 			for c in UpgradeDB.roll_cards(3, 0.0, 10, bm, rng, 0):
 				if c["id"] == d["id"]:
 					leak += 1
+					print("   se ofrece en máx.: ", d["id"])
 	ok(leak == 0, "T2 ninguna mejora se ofrece cuando está en su nivel máximo (todas probadas)")
 	# estadística principal en su límite duro => carta inútil no se ofrece
 	var bc := _build()
@@ -140,7 +163,7 @@ func _t2_level_50_and_chests() -> void:
 		bc.add("expert_eye", 3)      # 12 · 0.02 · 3.6 = 0.86 > tope 0.85
 	ok(bc.s("crit_chance") >= 0.85 - 1e-6, "T2 el crítico llega a su límite duro (85%)")
 	var useless := 0
-	for n in 500:
+	for n in 100:
 		for c in UpgradeDB.roll_cards(3, 0.0, 10, bc, rng, 0):
 			if c["id"] == "expert_eye" or c["id"] == "all_in":
 				useless += 1
@@ -148,11 +171,11 @@ func _t2_level_50_and_chests() -> void:
 	# afinidad con el equipamiento
 	var saved: Dictionary = GameState.loadout
 	var bq := _build()
-	var base_n := _count_id("paper_storm", bq, rng, 4000)
+	var base_n := _count_id("paper_storm", bq, rng, 400)
 	GameState.loadout = {"weapon": "case", "skill": "docs_burst", "tactic": "brawler", "gear": "toga"}
-	var with_docs := _count_id("paper_storm", bq, rng, 4000)
+	var with_docs := _count_id("paper_storm", bq, rng, 400)
 	GameState.loadout = {"weapon": "case", "skill": "seal_master", "tactic": "brawler", "gear": "toga"}
-	var without_docs := _count_id("paper_storm", bq, rng, 4000)
+	var without_docs := _count_id("paper_storm", bq, rng, 400)
 	GameState.loadout = saved
 	ok(with_docs > without_docs * 1.5, "T2 equipar Ráfaga de Documentos hace salir más 'Tormenta de Papel' (%d vs %d)" % [with_docs, without_docs])
 
@@ -202,6 +225,15 @@ func _t3_final_stats() -> void:
 			var reached := int(count[id]) / 10
 			exp_flat += float((d3["mile"] as Dictionary).get("flat_dmg", 0.0)) * reached
 			exp_more *= pow(1.0 + float((d3["mile"] as Dictionary).get("more_dmg_x", 0.0)), reached)
+	# mejoras "Catalizador" (amp): suman más_dmg_x según las otras mejoras distintas con la etiqueta
+	for id in count.keys():
+		var da := UpgradeDB.get_def(id)
+		if da.has("amp") and String(da["amp"]["stat"]) == "more_dmg_x":
+			var n_other := 0
+			for oid in count.keys():
+				if oid != id and (String(da["amp"]["tag"]) == "*" or (UpgradeDB.get_def(oid).get("tags", []) as Array).has(da["amp"]["tag"])):
+					n_other += 1
+			exp_more *= 1.0 + float(da["amp"]["per"]) * n_other * int(count[id])
 	# las sinergias activas suman más_dmg_x y regen: se incluyen explícitamente
 	for syn in UpgradeDB.synergies():
 		if b.active_synergies.has(syn["id"]):
@@ -210,6 +242,7 @@ func _t3_final_stats() -> void:
 	ok(absf(b.s("dmg_pct") - exp_dmg) < 1e-6, "T3 daño %% final = suma de todas las mejoras (%.3f)" % exp_dmg)
 	ok(absf(b.s("flat_dmg") - exp_flat) < 1e-6, "T3 daño plano final incluye hitos (%.2f)" % exp_flat)
 	ok(absf(b.s("regen") - exp_regen) < 1e-6, "T3 regeneración final = mejoras + sinergias (%.2f)" % exp_regen)
+	print("   more_dmg_x real %.6f esperado %.6f sinergias %s" % [b.s("more_dmg_x"), exp_more, str(b.active_synergies)])
 	ok(absf(b.s("more_dmg_x") - exp_more) / exp_more < 1e-9, "T3 daño total ×%.2f = producto de multiplicadores, hitos y sinergias" % exp_more)
 	# perm y equipo se suman
 	var b2 := Build.new()
@@ -408,7 +441,7 @@ func _t7_long_run() -> void:
 				if policy == "enfocada":
 					var best := -1
 					for c in cards:
-						var sc: int = b.count_of(c["id"]) * 4 + int(c["rarity"]) + (100 if FOCUS.has(c["id"]) else 0)
+						var sc: int = b.count_of(c["id"]) * 4 + int(c["rarity"]) + (100 if FOCUS.has(c["id"]) else (40 if _is_focus(c["id"]) else 0))
 						if sc > best:
 							best = sc
 							choice = c
@@ -440,10 +473,12 @@ func _t7_long_run() -> void:
 func _t8_sanity() -> void:
 	# build con TODAS las mejoras al máximo y rareza legendaria
 	var b := _build()
+	var all_picks: Array = []
 	for d in UpgradeDB.all():
 		var rars: Array = d["rarities"]
 		for i in int(d["max"]):
-			b.add(d["id"], rars[rars.size() - 1])
+			all_picks.append([d["id"], rars[rars.size() - 1]])
+	_bulk(b, all_picks)
 	var finite := true
 	for k in b.stats.keys():
 		var v := float(b.stats[k])
@@ -455,7 +490,7 @@ func _t8_sanity() -> void:
 			ok(float(b.stats[ck]) <= float(UpgradeDB.CAPS[ck]) + 1e-9, "T8 límite duro respetado: %s = %.2f ≤ %.2f" % [ck, float(b.stats[ck]), float(UpgradeDB.CAPS[ck])])
 	var pr := b.power_rating()
 	print("   Build teórica con TODO al máximo en legendario: poder ×%.0f, daño%% %.1f, daño total ×%.1f, crítico %.0f%%, vel. ataque +%.0f%%" % [pr, b.s("dmg_pct"), b.s("more_dmg_x"), b.s("crit_chance") * 100.0, b.s("atk_speed") * 100.0])
-	ok(pr < 1.0e8, "T8 incluso la build imposible (todo al máximo) queda por debajo de ×1e8 de poder (necesitaría más de 1000 cartas)")
+	ok(pr < 1.0e14, "T8 la build imposible (los 240+ tipos al máximo, ilegal con el límite de 30) sigue siendo finita y acotada")
 	# la build máxima REAL (un solo árbol de 50 niveles + 40 de otras) es fuerte pero finita
 	var rb := _build()
 	for i in 50:

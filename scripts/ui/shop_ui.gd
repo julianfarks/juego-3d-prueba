@@ -165,6 +165,10 @@ func _buy(i: int) -> void:
 	if o["sold"]:
 		return
 	var price := price_of(float(o["base"]))
+	if o["type"] == "card" and not GameState.build.can_add(o["card"]["id"]):
+		GameState.toast_msg(GameState.build.why_not(o["card"]["id"]), Color(1.0, 0.5, 0.4))
+		AudioManager.sfx("deny")
+		return
 	if not GameState.spend_coins(price):
 		AudioManager.sfx("deny")
 		return

@@ -76,6 +76,7 @@ func _ready() -> void:
 func reset_for_run() -> void:
 	alive = true
 	rig.revive()
+	Perks.reset()
 	skills.reset()
 	var b: Build = GameState.build
 	max_hp = compute_max_hp()
@@ -151,6 +152,7 @@ func move_speed() -> float:
 	var bonus := b.s("move_speed")
 	if kill_speed_t > 0.0:
 		bonus += b.s("kill_speed")
+	bonus += Perks.buff("speed")
 	return float(Config.PLAYER["move_speed"]) * (1.0 + minf(bonus, 1.6))
 
 
@@ -176,6 +178,7 @@ func _physics_process(delta: float) -> void:
 	_face_override_t = maxf(0.0, _face_override_t - delta)
 	_heal_budget = minf(14.0, _heal_budget + 14.0 * delta)
 	skills.update(delta)
+	Perks.update(delta)
 	_update_regen(delta, b)
 	# --- entrada de movimiento ---
 	var iv := _input_vector()
@@ -196,7 +199,7 @@ func _physics_process(delta: float) -> void:
 		_try_dodge(move_dir)
 	if _dodge_t > 0.0:
 		_dodge_t -= delta
-		var dspeed: float = float(Config.PLAYER["dodge_speed"]) * (1.0 + b.s("dodge_trail") * 0.0)
+		var dspeed: float = float(Config.PLAYER["dodge_speed"]) * (1.0 + minf(b.s("dodge_speed"), 1.0))
 		velocity.x = _dodge_dir.x * dspeed
 		velocity.z = _dodge_dir.z * dspeed
 		_trail_tick -= delta
@@ -280,7 +283,7 @@ func _enemy_in_reach() -> bool:
 
 
 func _do_jump() -> void:
-	velocity.y = float(Config.PLAYER["jump_velocity"])
+	velocity.y = float(Config.PLAYER["jump_velocity"]) * (1.0 + minf(GameState.build.s("jump_pow"), 0.6))
 	_jump_buffer = 0.0
 	AudioManager.sfx("jump", -8.0)
 	floor_snap_length = 0.0
@@ -294,7 +297,8 @@ func _try_dodge(move_dir: Vector3) -> void:
 	_dodge_dir = move_dir.normalized() if move_dir.length() > 0.1 else facing_dir()
 	_dodge_t = float(Config.PLAYER["dodge_time"])
 	_dodge_cd = float(Config.PLAYER["dodge_cd"]) * (1.0 - minf(b.s("dodge_cd"), 0.6))
-	iframes = maxf(iframes, float(Config.PLAYER["iframes"]))
+	iframes = maxf(iframes, float(Config.PLAYER["iframes"]) + b.s("iframe_add"))
+	Perks.fire("dodge", {})
 	_trail_hit.clear()
 	_trail_tick = 0.0
 	skills.dodge_haste_t = 2.5 if b.s("dodge_haste") > 0.0 else 0.0
@@ -312,21 +316,22 @@ func dodge_cd_fraction() -> float:
 
 # ------------------------------------------------------------------ salud
 func _update_regen(delta: float, b: Build) -> void:
-	var regen := b.s("regen")
+	var regen := b.s("regen") + max_hp * b.s("hp_regen_pct")
 	if regen > 0.0 and hp < max_hp:
 		_regen_acc += regen * delta
 		if _regen_acc >= 0.5:
 			hp = minf(max_hp, hp + _regen_acc)
 			_regen_acc = 0.0
 			emit_hp()
-	if shield < shield_max and _since_hurt > float(Config.PLAYER["shield_regen_delay"]):
-		shield = minf(shield_max, shield + float(Config.PLAYER["shield_regen"]) * delta)
+	if shield < shield_max and _since_hurt > float(Config.PLAYER["shield_regen_delay"]) * (1.0 - minf(b.s("shield_delay_cut"), 0.6)):
+		shield = minf(shield_max, shield + float(Config.PLAYER["shield_regen"]) * (1.0 + b.s("shield_regen_pct")) * delta)
 		emit_hp()
 
 
 func heal(amount: float) -> void:
 	if not alive:
 		return
+	amount *= 1.0 + GameState.build.s("heal_pow")
 	hp = minf(max_hp, hp + amount)
 	emit_hp()
 	if GameState.fx != null and amount >= 1.0:
@@ -336,6 +341,7 @@ func heal(amount: float) -> void:
 func heal_limited(amount: float) -> void:
 	if _heal_budget <= 0.0 or hp >= max_hp:
 		return
+	amount *= 1.0 + GameState.build.s("heal_pow")
 	var a := minf(amount, _heal_budget)
 	_heal_budget -= a
 	hp = minf(max_hp, hp + a)
@@ -353,7 +359,10 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 			GameState.fx.damage_number(global_position + Vector3(0, 2.3, 0), "¡OBJECIÓN!", Color(0.5, 0.9, 1.0), 1.0)
 		AudioManager.sfx("shield", -4.0)
 		return
-	var dmg := amount * (1.0 - minf(b.s("armor"), 0.6)) * (1.0 + b.s("dmg_taken"))
+	var armor := b.s("armor") + Perks.buff("armor")
+	if hp < max_hp * 0.35:
+		armor += b.s("armor_low")
+	var dmg := amount * (1.0 - minf(armor, 0.8)) * (1.0 + b.s("dmg_taken"))
 	dmg = skills.absorb(dmg)
 	if dmg <= 0.01:
 		hurt_iframes = 0.15
@@ -367,11 +376,13 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 		dmg -= absorbed
 		if shield <= 0.0 and shield_before > 0.0:
 			AudioManager.sfx("shield", -2.0)
+			Perks.fire("shield_break", {})
 			if b.s("syn_shield_blast") > 0.0:
 				Combat.explode(global_position, 5.0 * Combat.area_mult(), b.s("thorns") * 5.0 + 20.0, {"src": "thorns"})
 	if dmg > 0.0:
 		hp -= dmg
-	hurt_iframes = 0.4
+	hurt_iframes = 0.4 + b.s("hurt_iframe_add")
+	Perks.fire("hurt", {})
 	rig.play("hit", 0.28)
 	rig.hit_flash(0.8)
 	AudioManager.sfx("hurt", -2.0)

@@ -36,6 +36,15 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.4.0 — 244 mejoras, inventario de 30 tipos y venta
+- **244 mejoras funcionales** en una base de datos central (`UpgradeDB` + `UpgradeCatalog`), en 17 categorías. 241 son acumulables; Daño de Maletín llega a nivel 50 y 16 mejoras admiten 20 o más niveles. Cada mejora tiene id estable, nombre, descripción, icono, rareza, etiquetas, requisitos de aparición (arena, mejoras previas, equipamiento) y efecto real.
+- **Motor modular (`Perks`)**: en vez de 200 sistemas, las mejoras combinan disparadores (al golpear, crítico, baja, golpe de maletín, habilidad, esquiva, daño recibido, escudo roto, nivel, inicio/fin de arena, cada 3/5/8/12 s), condiciones (contra quemados, a distancia, con poca vida…), fuentes (maletín, documentos, ecos, bumerán…) y efectos (curar, escudo, explosión, rayo, aturdir, monedas, misil…). Nada se recalcula por fotograma: `Build` precalcula las listas al cambiar.
+- **Inventario táctil** (botón «MEJ n/30» en la HUD): cuadrícula de 30 espacios, filtros por categoría, rareza y nombre, detalle con efecto acumulado, pestaña de sinergias (activas y por completar).
+- **Límite de 30 tipos** (los niveles no ocupan espacio). Con 30/30 el cofre solo ofrece mejoras que ya tienes y lo explica; el botón INVENTARIO abre la gestión encima del cofre sin perderlo y, al liberar un espacio, se relanza gratis una vez.
+- **Vender / desechar** con confirmación (aviso en niveles altos y si se pierde una sinergia). Vender paga el valor mostrado, elimina todos los niveles y recalcula todo desde cero.
+- 11 sinergias nuevas por etiqueta y 14 mejoras «Catalizador» que amplifican las etiquetas que ya tienes.
+- Pruebas: `tests/progression_test.tscn` (numérica), `tests/inventory_test.tscn` (catálogo, límite, venta, cofres, guardado) y `--invtest` (renderizado con toques y comportamiento real en combate).
+
 ## Novedades 0.3.0 — builds acumulables y dificultad continua
 - **Mejoras con nivel (hasta 50).** Cada mejora muestra "NIVEL n → n+1" y su máximo propio (de 2 a 50). Daño de Maletín, Velocidad de ataque, Ojo de Perito, Salud, Barrido (radio), Armadura… suben de verdad en cada nivel. Una mejora al nivel máximo, o cuya estadística ya tocó su límite duro, **no vuelve a salir** en cofres ni tiendas.
 - **Hitos cada 10 niveles** (p. ej. Maletín: ×1.10 de daño total en 10, 20, 30, 40 y 50) y **7 sinergias por nivel** nuevas (Maestro del Maletín, Artillería Total, Aplastamiento Crítico…). Se calculan siempre desde cero, así que nada se aplica dos veces.
