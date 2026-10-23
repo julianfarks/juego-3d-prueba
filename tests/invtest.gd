@@ -130,7 +130,7 @@ func _ui_part() -> void:
 	ok(inv_btn != null and inv_btn.visible, "I1 el botón del inventario es visible en la HUD durante la partida")
 	var r := inv_btn.get_global_rect()
 	ok(r.size.x >= 100 and r.size.y >= 64, "I2 el botón mide %dx%d px (objetivo táctil ≥ 64)" % [int(r.size.x), int(r.size.y)])
-	ok(inv_btn.text == "MEJ 0/30", "I3 muestra el contador «%s»" % inv_btn.text)
+	ok(inv_btn.text == "INVENTARIO\n0/30", "I3 muestra el contador «%s»" % inv_btn.text)
 	# no se pisa con el botón de pausa
 	var pause_rect: Rect2 = Rect2()
 	for c in hud.find_children("*", "Button", true, false):
@@ -154,7 +154,7 @@ func _ui_part() -> void:
 		b.remove(b.counts.keys()[b.counts.size() - 1], false)
 	GameState.build_changed.emit()
 	await _frames(3)
-	ok(b.type_count() == 30 and inv_btn.text == "MEJ 30/30", "I6 el contador de la HUD pasa a «%s»" % inv_btn.text)
+	ok(b.type_count() == 30 and inv_btn.text == "INVENTARIO\n30/30", "I6 el contador de la HUD pasa a «%s»" % inv_btn.text)
 	# abrir con un TOQUE
 	await _tap(inv_btn)
 	var ui := _overlay(InventoryUI) as InventoryUI
@@ -247,7 +247,7 @@ func _ui_part() -> void:
 		if not b.stats.has(k) or absf(float(fresh_stats[k]) - float(b.stats[k])) > 1e-9:
 			same = false
 	ok(same, "I33 las estadísticas tras vender son exactamente las de una build sin esa mejora")
-	ok(inv_btn.text == "MEJ 29/30", "I34 el botón de la HUD se actualiza a «%s»" % inv_btn.text)
+	ok(inv_btn.text == "INVENTARIO\n29/30", "I34 el botón de la HUD se actualiza a «%s»" % inv_btn.text)
 	await _shot("i05_tras_vender")
 	# ----- desechar
 	var disc_id: String = ui._slots.keys()[0]

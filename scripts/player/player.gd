@@ -260,8 +260,8 @@ func _physics_process(delta: float) -> void:
 		if _step_t <= 0.0:
 			_step_t = 0.34
 			AudioManager.sfx_random("step", 3, -14.0)
-	# --- ataque automático / mantenido ---
-	if Input.is_action_pressed("attack") or (bool(SaveSystem.setting("auto_attack")) and _enemy_in_reach()):
+	# --- ataque: SOLO manual (una pulsación = un lanzamiento; mantener pulsado no repite) ---
+	if Input.is_action_just_pressed("attack"):
 		skills.try_cast(0)
 	if Input.is_action_just_pressed("skill1"):
 		skills.try_cast(1)
@@ -271,11 +271,6 @@ func _physics_process(delta: float) -> void:
 		interact_target.activate(self)
 	_update_aura(delta)
 	GameState.energy_changed.emit(skills.energy, skills.energy_max)
-
-
-func _enemy_in_reach() -> bool:
-	var e := Combat.nearest_enemy(global_position, 8.0)
-	return e != null
 
 
 func _do_jump() -> void:

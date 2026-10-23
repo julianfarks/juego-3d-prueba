@@ -82,6 +82,20 @@ func _register_actions() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
+	# mando: ATACAR = X (cuadrado), SALTAR = A, ESQUIVAR = B, DOCS = Y, USAR = RB, pausa = Start, stick izquierdo = mover
+	var pad := {"attack": JOY_BUTTON_X, "jump": JOY_BUTTON_A, "dodge": JOY_BUTTON_B, "skill1": JOY_BUTTON_Y,
+		"interact": JOY_BUTTON_RIGHT_SHOULDER, "pause": JOY_BUTTON_START}
+	for action in pad.keys():
+		var jb := InputEventJoypadButton.new()
+		jb.button_index = pad[action]
+		InputMap.action_add_event(action, jb)
+	var axes := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
+		"move_forward": [JOY_AXIS_LEFT_Y, -1.0], "move_back": [JOY_AXIS_LEFT_Y, 1.0]}
+	for action in axes.keys():
+		var jm := InputEventJoypadMotion.new()
+		jm.axis = axes[action][0]
+		jm.axis_value = axes[action][1]
+		InputMap.action_add_event(action, jm)
 
 
 func reset_run_stats() -> void:

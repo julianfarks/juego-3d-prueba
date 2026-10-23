@@ -132,17 +132,22 @@ func _build() -> void:
 	pb.pressed.connect(func(): pause_pressed.emit())
 	add_child(pb)
 	UIKit.place(pb, 1.0, 0.0, -92, 14, 72, 72)
-	_inv_btn = UIKit.button("MEJ 0/30", Vector2(120, 72), 20)
+	_inv_btn = UIKit.button("INVENTARIO\n0/30", Vector2(190, 72), 20)
+	_inv_btn.name = "InventoryButton"
+	_inv_btn.icon = _briefcase_icon()
+	_inv_btn.expand_icon = false
+	_inv_btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_inv_btn.add_theme_constant_override("h_separation", 8)
 	_inv_btn.pressed.connect(func(): inventory_pressed.emit())
 	add_child(_inv_btn)
-	UIKit.place(_inv_btn, 1.0, 0.0, -222, 14, 120, 72)
+	UIKit.place(_inv_btn, 1.0, 0.0, -302, 14, 190, 72)
 	_fps_label = UIKit.label("", 18, Color(0.7, 1, 0.7), HORIZONTAL_ALIGNMENT_RIGHT)
 	add_child(_fps_label)
 	UIKit.place(_fps_label, 1.0, 0.0, -300, 92, 280, 24)
 	var pw := VBoxContainer.new()
 	pw.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_child(pw)
-	UIKit.place(pw, 1.0, 0.0, -452, 14, 220, 140)
+	UIKit.place(pw, 1.0, 0.0, -532, 14, 220, 140)
 	_power_label = UIKit.label("Build: Pasante", 20, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
 	pw.add_child(_power_label)
 	_power_bar = _bar(Color(1.0, 0.7, 0.2), Vector2(220, 10))
@@ -275,10 +280,25 @@ func _on_synergy(syn: Dictionary) -> void:
 	GameState.toast_msg(String(syn.get("desc", "")), Color(1.0, 0.95, 0.7))
 
 
+## Icono de maletín dibujado por código (32x32).
+static func _briefcase_icon() -> ImageTexture:
+	var im := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var body := Color(0.78, 0.5, 0.2)
+	var dark := Color(0.35, 0.2, 0.08)
+	im.fill_rect(Rect2i(11, 4, 10, 3), dark)       # asa
+	im.fill_rect(Rect2i(11, 4, 2, 8), dark)
+	im.fill_rect(Rect2i(19, 4, 2, 8), dark)
+	im.fill_rect(Rect2i(3, 10, 26, 18), dark)      # cuerpo
+	im.fill_rect(Rect2i(4, 11, 24, 16), body)
+	im.fill_rect(Rect2i(4, 17, 24, 2), dark)       # banda
+	im.fill_rect(Rect2i(14, 15, 4, 6), Color(1.0, 0.85, 0.3))   # cierre
+	return ImageTexture.create_from_image(im)
+
+
 func _refresh_build() -> void:
 	var b: Build = GameState.build
 	var pr := b.power_rating()
-	_inv_btn.text = "MEJ %d/%d" % [b.type_count(), Build.MAX_TYPES]
+	_inv_btn.text = "INVENTARIO\n%d/%d" % [b.type_count(), Build.MAX_TYPES]
 	_inv_btn.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4) if b.is_full() else UIKit.TEXT)
 	var ti := 0
 	for i in TIERS.size():

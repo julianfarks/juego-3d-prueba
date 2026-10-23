@@ -51,7 +51,6 @@ func _ready() -> void:
 	_toggle("Mostrar FPS", "show_fps")
 	_section("Juego")
 	_slider("Sensibilidad de cámara", "camera_sens", 0.3, 2.5, 0.05)
-	_toggle("Ataque automático", "auto_attack")
 	_toggle("Números de daño", "damage_numbers")
 	_slider("Tamaño de los números", "number_size", 0.6, 1.6, 0.05, true)
 	_toggle("Reducir efectos con muchos impactos", "reduce_fx")

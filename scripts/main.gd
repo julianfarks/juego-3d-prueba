@@ -81,6 +81,14 @@ func _ready() -> void:
 			add_child(cnode)
 			cnode.set("main", self)
 		return
+	if Config.cmd_flag("--controltest"):
+		var cot := load("res://tests/controltest.gd")
+		if cot != null:
+			var con: Node = cot.new()
+			con.name = "ControlTest"
+			add_child(con)
+			con.set("main", self)
+		return
 	if Config.cmd_flag("--biometest"):
 		var bmt := load("res://tests/biometest.gd")
 		if bmt != null:

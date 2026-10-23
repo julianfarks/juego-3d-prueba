@@ -44,7 +44,6 @@ func defaults() -> Dictionary:
 			"camera_sens": 1.0,
 			"vibration": true,
 			"show_fps": false,
-			"auto_attack": true,
 			"damage_numbers": true,
 			"number_size": 1.0,    # escala de los números de daño (0.6-1.6)
 			"reduce_fx": false,    # agrupar/recortar números y efectos cuando hay muchos impactos

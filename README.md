@@ -36,6 +36,12 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.7.1 — inventario visible y ataque 100% manual
+- **Botón INVENTARIO** (HUD, junto a pausa): icono de maletín + texto «INVENTARIO» + contador de tipos distintos «n/30», 190×72 px con 17 px de separación respecto a pausa. Abre/cierra el inventario (mejoras, niveles, sinergias) sin perder la partida.
+- **Sin ataque automático**: `player.gd` ya no lanza el maletín al haber enemigos cerca ni repite mientras se mantiene pulsado; una pulsación (`attack` *just pressed*) = un lanzamiento, y solo si el maletín está listo. Eliminados el ajuste «Ataque automático» y su valor guardado (los guardados antiguos lo ignoran). Los efectos de mejoras (explosiones, cohetes, fragmentos…) siguen saliendo de los impactos, sin iniciar lanzamientos principales.
+- **Mando**: ATACAR = X, SALTAR = A, ESQUIVAR = B, DOCS = Y, USAR = RB, pausa = Start, stick izquierdo = mover (antes no había mapeo de mando).
+- **Pruebas**: `tests/controltest.gd` (`--controltest`, 44 comprobaciones con toques y botones de mando reales).
+
 ## Novedades 0.7.0 — 6 biomas con terreno real, fondo en capas y transición de región
 - **6 biomas** (`scripts/arena/biome_db.gd`, datos puros): Ruinas urbanas, Bosque judicial encantado, Complejo industrial, Desierto de expedientes, Ciudadela flotante y Tribunal final. Cada uno define materiales de suelo, tipo de relieve, arquitectura, paleta, luz/niebla, props, tienda/cofre/portal temáticos y elementos de fondo. El bioma cambia **solo tras cada jefe principal** (5 arenas por región; `Scaling.cycle_of(i) % 6`).
 - **Terreno con relieve y colisión** (`terrain.gd`): altura procedural (`Terrain.height`), malla de 1 m con color por vértice, `HeightMapShape3D`; zonas reservadas (obstáculos, plataformas, recompensas) se aplanan. Jugador, enemigos, monedas, recompensas, maletín y proyectiles siguen el relieve.
