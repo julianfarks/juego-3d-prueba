@@ -156,6 +156,13 @@ func _run() -> void:
 	Feedback.record = true
 	AudioManager.record_combat = true
 	ok(ct != null, "C0b existe el nodo CaseThrow en el mundo")
+	# música principal en bucle + icono de la app
+	var mm: AudioStreamPlayer = AudioManager._main_music
+	ok(mm != null and mm.stream is AudioStreamMP3 and (mm.stream as AudioStreamMP3).loop, "C0c la canción principal carga como MP3 con bucle")
+	AudioManager.play_music("combat")
+	await _secs(1.0)
+	ok(mm.playing, "C0d la canción principal suena en combate")
+	ok(ResourceLoader.exists("res://assets/icon/icon.png") and str(ProjectSettings.get_setting("application/config/icon")).ends_with("assets/icon/icon.png"), "C0e el icono de la app es la imagen nueva")
 	_saved_arc = float(GameState.weapon_params.get("arc", 150.0))
 	await _t1_throw_replaces_melee()
 	await _t2_return_and_rethrow()

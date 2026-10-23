@@ -23,6 +23,7 @@ var _music_a: AudioStreamPlayer
 var _music_b: AudioStreamPlayer
 var _boss_music: AudioStreamPlayer
 var _menu_music: AudioStreamPlayer
+var _main_music: AudioStreamPlayer     # canción principal (motion_to_chase) en bucle: menú, sala y combate
 var _ambient: AudioStreamPlayer
 var _current_music := "none"
 var _intensity := 0.0
@@ -58,6 +59,7 @@ func _ready() -> void:
 		_combat_prio.append(-1)
 		_combat_t0.append(-10.0)
 	_menu_music = _make_music("music_menu", "Music")
+	_main_music = _make_music("music_main", "Music")
 	_music_a = _make_music("music_combat_a", "Music")
 	_music_b = _make_music("music_combat_b", "Music")
 	_boss_music = _make_music("music_boss", "Music")
@@ -93,6 +95,8 @@ func _make_music(stream_name: String, bus: String) -> AudioStreamPlayer:
 			w.loop_begin = 0
 			var bytes_per := 2 if w.format == AudioStreamWAV.FORMAT_16_BITS else 1
 			w.loop_end = w.data.size() / bytes_per / (2 if w.stereo else 1)
+		elif s is AudioStreamMP3:
+			(s as AudioStreamMP3).loop = true
 		p.stream = s
 	add_child(p)
 	return p
@@ -102,6 +106,8 @@ func _load(stream_name: String) -> AudioStream:
 	if _cache.has(stream_name):
 		return _cache[stream_name]
 	var path := AUDIO_DIR + stream_name + ".wav"
+	if not ResourceLoader.exists(path) and ResourceLoader.exists(AUDIO_DIR + stream_name + ".mp3"):
+		path = AUDIO_DIR + stream_name + ".mp3"
 	var res: AudioStream = null
 	if ResourceLoader.exists(path):
 		res = load(path) as AudioStream
@@ -256,11 +262,15 @@ func play_music(kind: String) -> void:
 	if kind == _current_music:
 		return
 	_current_music = kind
-	for p in [_menu_music, _music_a, _music_b, _boss_music]:
+	for p in [_menu_music, _music_a, _music_b, _boss_music, _main_music]:
 		_fade[p] = 0.0
+	var has_main := _main_music != null and _main_music.stream != null
 	match kind:
 		"menu":
-			_start(_menu_music, 0.9)
+			_start(_main_music if has_main else _menu_music, 0.8 if has_main else 0.9)
+		"combat" when has_main:
+			_start(_main_music, 0.8)       # sin reiniciar si ya sonaba: el bucle continúa entre menú, sala y arenas
+			_intensity = 0.0
 		"combat":
 			# Las dos capas se reinician a la vez para que queden sincronizadas.
 			_music_a.stop()
