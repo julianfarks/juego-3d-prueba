@@ -94,6 +94,14 @@ func reset_for_run() -> void:
 	GameState.energy_changed.emit(skills.energy, skills.energy_max)
 
 
+## Aplica la salud/escudo/revivires de una partida guardada (después de reset_for_run).
+func apply_saved(r: Dictionary) -> void:
+	hp = clampf(float(r["hp"]), 1.0, max_hp)
+	shield = clampf(float(r["shield"]), 0.0, shield_max)
+	revives_left = int(r["revives_left"])
+	emit_hp()
+
+
 func compute_max_hp() -> float:
 	var b: Build = GameState.build
 	return maxf(30.0, (float(Config.PLAYER["max_hp"]) + b.s("max_hp_flat")) * (1.0 + b.s("max_hp_pct")))

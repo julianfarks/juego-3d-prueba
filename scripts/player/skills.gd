@@ -34,6 +34,7 @@ var _zones: Array = []
 var _energy_kill_budget := 25.0
 var _passive_acc := 0.0
 var auto_aim := true
+var practice := false        # en la Sala Central la energía no se agota (para probar habilidades)
 
 
 func setup(p: CharacterBody3D) -> void:
@@ -190,6 +191,8 @@ func try_cast(slot: int) -> bool:
 
 
 func _pay(slot: int) -> bool:
+	if practice:
+		energy = energy_max
 	var cost := skill_cost(slot)
 	if energy < cost:
 		denied.emit(slot, "energy")
@@ -213,9 +216,15 @@ func _after_secondary() -> void:
 	cooldown_fired.emit(0)
 
 
+## Parámetro de la herramienta principal equipada (Maletín, Mazo, Pluma…); ver LoadoutDB.
+func _wp(key: String, default_value: float) -> float:
+	var wp: Dictionary = GameState.weapon_params
+	return float(wp.get(key, default_value))
+
+
 func _cast_slam() -> bool:
 	var amult := attack_speed_mult()
-	cd_max[0] = float(Config.SKILLS["slam"]["cd"])
+	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0)
 	cd[0] = cd_max[0]  # update() lo descuenta más rápido cuanta más velocidad de ataque haya
 	var dir := aim_dir()
 	player.face_dir(dir, 0.4)
@@ -236,10 +245,10 @@ func _slam_hit(dir: Vector3, mega: bool) -> void:
 	if not player.alive:
 		return
 	var b: Build = GameState.build
-	var base: float = float(Config.SKILLS["slam"]["dmg"])
-	var radius: float = float(Config.SKILLS["slam"]["radius"]) * Combat.area_mult()
-	var arc_deg: float = float(Config.SKILLS["slam"]["arc"])
-	var knock: float = float(Config.SKILLS["slam"]["knock"])
+	var base: float = float(Config.SKILLS["slam"]["dmg"]) * _wp("dmg_x", 1.0)
+	var radius: float = float(Config.SKILLS["slam"]["radius"]) * _wp("radius_x", 1.0) * Combat.area_mult()
+	var arc_deg: float = _wp("arc", float(Config.SKILLS["slam"]["arc"]))
+	var knock: float = float(Config.SKILLS["slam"]["knock"]) * _wp("knock_x", 1.0)
 	var center: Vector3 = player.global_position
 	if mega:
 		radius *= 2.0

@@ -35,6 +35,12 @@ var main: Node = null
 var cam: Node = null
 var projectiles: Node = null
 
+var difficulty_id := "associate"     # dificultad de la partida en curso
+var loadout: Dictionary = {}         # equipamiento de la partida en curso (ver LoadoutDB)
+var weapon_params: Dictionary = {}   # parámetros del ataque primario según la herramienta equipada
+var _flushed: Dictionary = {}        # parte de la partida ya volcada a las estadísticas permanentes
+var _fees_paid := 0                  # honorarios ya cobrados en esta partida (la victoria permite seguir)
+
 var look_delta := Vector2.ZERO   # gestos de cámara acumulados por la capa táctil
 var kill_streak := 0
 var streak_timer := 0.0
@@ -87,7 +93,22 @@ func reset_run_stats() -> void:
 	}
 
 
+func _apply_setup(lo: Dictionary, diff_id: String) -> void:
+	loadout = LoadoutDB.sanitize(lo)
+	difficulty_id = diff_id if LoadoutDB.DIFFICULTIES.has(diff_id) else LoadoutDB.DEFAULT_DIFFICULTY
+	Scaling.set_difficulty(difficulty_id)
+	weapon_params = LoadoutDB.weapon_params(loadout)
+	build.loadout_stats = LoadoutDB.total_stats(loadout)
+
+
+func _reset_flush() -> void:
+	_flushed = {"kills": 0, "bosses": 0, "playtime": 0.0, "damage": 0.0, "coins": 0, "cards": 0}
+	_fees_paid = 0
+
+
 func start_run() -> void:
+	if player != null:
+		player.skills.practice = false
 	in_run = true
 	arena_index = 0
 	kills = 0
@@ -97,6 +118,8 @@ func start_run() -> void:
 	kill_streak = 0
 	streak_timer = 0.0
 	reset_run_stats()
+	_reset_flush()
+	_apply_setup(LoadoutDB.equipped(), LoadoutDB.selected_difficulty())
 	var perm: Dictionary = SaveSystem.data["meta"]["perm"]
 	build.level = 0
 	build.reset(perm)
@@ -109,13 +132,123 @@ func start_run() -> void:
 	run_started.emit()
 
 
+## Prepara el estado para probar el equipamiento en la Sala Central (sin partida en curso).
+func prepare_practice() -> void:
+	in_run = false
+	_apply_setup(LoadoutDB.equipped(), LoadoutDB.selected_difficulty())
+	var perm: Dictionary = SaveSystem.data["meta"]["perm"]
+	build.level = 0
+	build.reset(perm)
+	if player != null:
+		player.reset_for_run()
+		player.skills.practice = true
+
+
+## Foto de la partida actual para guardarla. 'stage': fight (al empezar la arena), reward (arena
+## completada, cofre sin abrir) o portal (cofre abierto y cartas elegidas).
+func snapshot_run(stage: String) -> Dictionary:
+	flush_stats()      # la foto y las estadísticas permanentes siempre quedan coherentes
+	var pl = player
+	var pos := Vector3.ZERO
+	var hp := 100.0
+	var sh := 0.0
+	var rv := 0
+	if pl != null:
+		pos = pl.global_position
+		hp = float(pl.hp)
+		sh = float(pl.shield)
+		rv = int(pl.revives_left)
+	var ar = arena
+	return {
+		"version": SaveSystem.RUN_VERSION,
+		"stage": stage,
+		"arena_index": arena_index,
+		"arena_seed": int(ar.seed_used) if ar != null else 0,
+		"chest_taken": stage == "portal",
+		"difficulty": difficulty_id,
+		"loadout": loadout.duplicate(),
+		"coins": coins, "kills": kills, "xp": xp, "level": level, "run_time": run_time,
+		"hp": hp, "shield": sh, "revives_left": rv,
+		"player_pos": [pos.x, pos.y, pos.z],
+		"picks": build.picks.duplicate(true),
+		"run_stats": run_stats.duplicate(true),
+		"flushed": _flushed.duplicate(),
+		"fees_paid": _fees_paid,
+		"shop_purchases": ShopUI.purchases,
+		"saved_at": Time.get_unix_time_from_system(),
+	}
+
+
+## Restaura una partida guardada (ya validada por SaveSystem). No cuenta como partida nueva.
+func restore_run(r: Dictionary) -> void:
+	if player != null:
+		player.skills.practice = false
+	in_run = true
+	arena_index = int(r["arena_index"])
+	kills = int(r["kills"])
+	xp = int(r["xp"])
+	level = int(r["level"])
+	run_time = float(r["run_time"])
+	coins = int(r["coins"])
+	kill_streak = 0
+	streak_timer = 0.0
+	reset_run_stats()
+	var rs: Dictionary = r["run_stats"]
+	for k in rs.keys():
+		run_stats[k] = rs[k]
+	_reset_flush()
+	var fl: Dictionary = r.get("flushed", {})
+	for k in fl.keys():
+		if _flushed.has(k):
+			_flushed[k] = fl[k]
+	_fees_paid = int(r.get("fees_paid", 0))
+	var lo: Dictionary = r["loadout"]
+	loadout = lo.duplicate()
+	difficulty_id = String(r["difficulty"])
+	Scaling.set_difficulty(difficulty_id)
+	weapon_params = LoadoutDB.weapon_params(loadout)
+	var perm: Dictionary = SaveSystem.data["meta"]["perm"]
+	build.restore(r["picks"], perm, LoadoutDB.total_stats(loadout), level)
+	coins_changed.emit(coins)
+	kills_changed.emit(kills)
+	xp_changed.emit(xp, xp_to_next(), level)
+	run_started.emit()
+
+
 func score() -> int:
 	return int(kills * 10 + run_stats["arenas"] * 150 + run_stats["bosses"] * 1000 + run_stats["coins_earned"] * 0.5)
 
 
 func fees_for_run(victory: bool) -> int:
 	var base := float(run_stats["arenas"]) * 18.0 + float(kills) * 0.6 + float(run_stats["bosses"]) * 90.0
-	return int(round(base * (1.25 if victory else 1.0)))
+	return int(round(base * (1.25 if victory else 1.0) * Scaling.diff_x("fee_x")))
+
+
+## Vuelca a las estadísticas permanentes lo ganado desde el último volcado (así los datos se
+## conservan aunque se cierre la app, sin contar nada dos veces al reanudar una partida guardada).
+func flush_stats() -> void:
+	if _flushed.is_empty():
+		_reset_flush()
+	var d := SaveSystem.data
+	var st: Dictionary = d["stats"]
+	var cur := {
+		"kills": kills, "bosses": int(run_stats["bosses"]), "playtime": run_time,
+		"damage": float(run_stats["damage_dealt"]), "coins": int(run_stats["coins_earned"]), "cards": int(run_stats["cards"]),
+	}
+	for k in cur.keys():
+		var delta: float = float(cur[k]) - float(_flushed[k])
+		if delta > 0.0:
+			if typeof(st[k]) == TYPE_FLOAT:
+				st[k] = float(st[k]) + delta
+			else:
+				st[k] = int(st[k]) + int(round(delta))
+			_flushed[k] = cur[k]
+	var rec: Dictionary = d["records"]
+	rec["best_arena"] = maxi(int(rec["best_arena"]), arena_index + 1)
+	rec["best_cycle"] = maxi(int(rec["best_cycle"]), Scaling.cycle_of(arena_index) + 1)
+	rec["best_kills"] = maxi(int(rec["best_kills"]), kills)
+	rec["best_time"] = maxf(float(rec["best_time"]), run_time)
+	rec["best_score"] = maxi(int(rec["best_score"]), score())
 
 
 ## Cierra la partida: guarda récords, estadísticas y honorarios. Devuelve el resumen.
@@ -123,7 +256,8 @@ func end_run(victory: bool) -> Dictionary:
 	if not in_run:
 		return {}
 	in_run = false
-	var fees := fees_for_run(victory)
+	var fees := maxi(0, fees_for_run(victory) - _fees_paid)
+	_fees_paid += fees
 	var summary := {
 		"victory": victory,
 		"arena": arena_index + 1,
@@ -135,24 +269,16 @@ func end_run(victory: bool) -> Dictionary:
 		"stats": run_stats.duplicate(),
 		"build": build.summary_lines(),
 		"power": build.power_rating(),
+		"difficulty": difficulty_id,
 	}
 	var d := SaveSystem.data
 	d["meta"]["fees"] += fees
-	var rec: Dictionary = d["records"]
-	rec["best_arena"] = maxi(int(rec["best_arena"]), arena_index + 1)
-	rec["best_cycle"] = maxi(int(rec["best_cycle"]), Scaling.cycle_of(arena_index) + 1)
-	rec["best_kills"] = maxi(int(rec["best_kills"]), kills)
-	rec["best_time"] = maxf(float(rec["best_time"]), run_time)
-	rec["best_score"] = maxi(int(rec["best_score"]), score())
-	var st: Dictionary = d["stats"]
-	st["kills"] += kills
-	st["coins"] += int(run_stats["coins_earned"])
-	st["bosses"] += int(run_stats["bosses"])
-	st["playtime"] += run_time
-	st["damage"] += float(run_stats["damage_dealt"])
-	st["cards"] += int(run_stats["cards"])
-	if not victory:
-		st["deaths"] += 1
+	flush_stats()
+	if victory:
+		d["stats"]["wins"] += 1
+	else:
+		d["stats"]["deaths"] += 1
+	d["run"] = {}          # una partida terminada nunca se puede recuperar
 	SaveSystem.save_now()
 	run_ended.emit(victory)
 	return summary

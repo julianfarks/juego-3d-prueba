@@ -35,3 +35,14 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
+
+## Novedades 0.2.0
+- **Guardar y continuar partida**: guardado atómico con copia de seguridad y validación; autoguardado al empezar
+  cada arena, al completarla y al recoger la recompensa; CONTINUAR / NUEVA PARTIDA (con aviso antes de
+  sobrescribir); "Guardar y salir" en la pausa. Perder o abandonar una partida elimina el guardado.
+- **Cofre**: cartel flotante ABRIR con icono de mano, botón táctil por cercanía, el portal indica que primero
+  hay que abrir el cofre. Cada cofre da su recompensa una sola vez.
+- **Sala Central** (menú → Sala Central): portales NUEVA / CONTINUAR PARTIDA, Armería (herramienta, habilidad,
+  estilo, equipo — afectan al combate de verdad), Mesa del Juez (4 dificultades), Despacho (mejoras permanentes),
+  Archivo de Casos (estadísticas) y zona de práctica con muñecos.
+- Pruebas: `tests/system_test.tscn` (sin render, 2 procesos), `--flowtest` y `--lobbytest` (con render).

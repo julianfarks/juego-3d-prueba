@@ -20,6 +20,16 @@ const ENEMY_MIN_ARENA := {
 }
 
 static var dev_mult := 1.0   # multiplicador manual (modo desarrollador)
+static var diff_id := "associate"   # dificultad de la partida (la fija GameState al empezar/cargar)
+
+
+static func set_difficulty(id: String) -> void:
+	diff_id = id if LoadoutDB.DIFFICULTIES.has(id) else LoadoutDB.DEFAULT_DIFFICULTY
+
+
+## Multiplicador de la dificultad elegida: "hp_x", "dmg_x", "count_x", "reward_x" o "fee_x".
+static func diff_x(key: String) -> float:
+	return float(LoadoutDB.diff(diff_id)[key])
 
 
 static func zone_len() -> int:
@@ -40,17 +50,17 @@ static func kind_of(arena_index: int) -> String:
 
 static func hp_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["hp_per_arena"]) * arena_index) * pow(float(c["hp_per_cycle"]), cycle_of(arena_index)) * dev_mult
+	return (1.0 + float(c["hp_per_arena"]) * arena_index) * pow(float(c["hp_per_cycle"]), cycle_of(arena_index)) * dev_mult * diff_x("hp_x")
 
 
 static func dmg_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["dmg_per_arena"]) * arena_index) * pow(float(c["dmg_per_cycle"]), cycle_of(arena_index)) * (1.0 + (dev_mult - 1.0) * 0.5)
+	return (1.0 + float(c["dmg_per_arena"]) * arena_index) * pow(float(c["dmg_per_cycle"]), cycle_of(arena_index)) * (1.0 + (dev_mult - 1.0) * 0.5) * diff_x("dmg_x")
 
 
 static func count_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return 1.0 + float(c["count_per_arena"]) * arena_index + float(c["count_per_cycle"]) * cycle_of(arena_index)
+	return (1.0 + float(c["count_per_arena"]) * arena_index + float(c["count_per_cycle"]) * cycle_of(arena_index)) * diff_x("count_x")
 
 
 static func spawn_interval(arena_index: int) -> float:
@@ -65,7 +75,7 @@ static func speed_mult(arena_index: int) -> float:
 
 static func reward_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return 1.0 + float(c["reward_per_arena"]) * arena_index + float(c["reward_per_cycle"]) * cycle_of(arena_index)
+	return (1.0 + float(c["reward_per_arena"]) * arena_index + float(c["reward_per_cycle"]) * cycle_of(arena_index)) * diff_x("reward_x")
 
 
 ## Probabilidad de que un enemigo normal reciba una variante peligrosa (afijo).

@@ -5,6 +5,7 @@ extends Control
 signal resume_pressed
 signal settings_pressed
 signal quit_pressed
+signal save_quit_pressed
 
 
 func _ready() -> void:
@@ -24,6 +25,9 @@ func _ready() -> void:
 	var s := UIKit.button("Ajustes", Vector2(440, 62), 24)
 	s.pressed.connect(func(): settings_pressed.emit())
 	v.add_child(s)
+	var sq := UIKit.button("Guardar y salir", Vector2(440, 62), 24)
+	sq.pressed.connect(func(): save_quit_pressed.emit())
+	v.add_child(sq)
 	var q := UIKit.button("Abandonar partida", Vector2(440, 62), 24)
 	q.pressed.connect(_confirm_quit)
 	v.add_child(q)
@@ -62,7 +66,7 @@ func _confirm_quit() -> void:
 	box.add_child(UIKit.dim_background(0.6))
 	var v := UIKit.center_box(box, Vector2(600, 240))
 	v.add_child(UIKit.label("¿Abandonar la partida?", 32, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER))
-	v.add_child(UIKit.label("Se contará como derrota (cobras los honorarios acumulados).", 20, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+	v.add_child(UIKit.label("Se contará como derrota y la partida guardada se perderá (cobras los honorarios).", 20, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(row)

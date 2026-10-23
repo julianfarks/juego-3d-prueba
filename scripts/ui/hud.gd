@@ -35,6 +35,7 @@ var _toast_queue: Array = []
 var _toast_cd := 0.0
 var _tier := -1
 var _debug_label: Label
+var _top_bg: PanelContainer
 
 const TIERS := [
 	{"name": "Pasante", "at": 0.0, "col": Color(0.78, 0.8, 0.85)},
@@ -98,6 +99,7 @@ func _build() -> void:
 	# --- objetivo (arriba-centro) ---
 	# Panel oscuro detras del objetivo: se leia mal sobre fondos brillantes.
 	var top_bg := PanelContainer.new()
+	_top_bg = top_bg
 	top_bg.add_theme_stylebox_override("panel", UIKit.style(Color(0.03, 0.04, 0.08, 0.62), Color(1, 1, 1, 0.08), 14, 1, 8))
 	top_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(top_bg)
@@ -204,6 +206,13 @@ func _on_xp(xp: int, to_next: int, level: int) -> void:
 	_lvl_label.text = "Caso %d" % (level + 1)
 
 
+## En la Sala Central no hay objetivo ni jefe: se oculta el panel superior.
+func set_lobby(on: bool) -> void:
+	if _top_bg != null:
+		_top_bg.visible = not on
+	_boss_box.visible = false
+
+
 func _on_objective(text: String, prog: float) -> void:
 	_obj_label.text = text
 	_obj_bar.value = prog
@@ -302,7 +311,7 @@ func _process(delta: float) -> void:
 	# prompt de interacción
 	var pl = GameState.player
 	if pl != null and pl.interact_target != null:
-		_prompt.text = "[ USAR ]  " + String(pl.interact_target.prompt)
+		_prompt.text = "[ %s ]  %s" % [String(pl.interact_target.action_text), String(pl.interact_target.prompt)]
 	else:
 		_prompt.text = ""
 	# racha

@@ -253,6 +253,8 @@ func _draw() -> void:
 				pts.append(c + Vector2(cos(a), sin(a)) * r * 0.92)
 			draw_colored_polygon(pts, Color(0, 0, 0, 0.55))
 		var txt: String = LABELS[name]
+		if name == "interact" and pl != null and not edit_mode and pl.interact_target != null:
+			txt = String((pl.interact_target as Interactable).action_text)
 		var fs := int(clampf(r * 0.3, 12.0, 26.0))
 		var ts := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 		draw_string(font, c + Vector2(-ts.x * 0.5, fs * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.95))

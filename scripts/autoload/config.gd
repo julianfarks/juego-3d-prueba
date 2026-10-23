@@ -4,7 +4,7 @@ extends Node
 ## cada enemigo individualmente.
 
 const GAME_NAME := "LAWYER MAYHEM 3D"
-const VERSION := "0.1.0"
+const VERSION := "0.2.0"
 
 # Capas de física (máscaras de bits)
 const L_WORLD := 1

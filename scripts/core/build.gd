@@ -13,6 +13,7 @@ var stats: Dictionary = {}            # estadísticas calculadas
 var active_synergies: Array = []      # ids de sinergias activas
 var perm: Dictionary = {}             # id perm -> nivel (meta-progresión)
 var level := 0                        # nivel de caso (XP) de la partida
+var loadout_stats: Dictionary = {}    # estadísticas del equipamiento elegido en la Sala Central
 
 
 func reset(perm_levels: Dictionary) -> void:
@@ -21,6 +22,23 @@ func reset(perm_levels: Dictionary) -> void:
 	active_synergies.clear()
 	perm = perm_levels.duplicate()
 	recompute(false)
+
+
+## Reconstruye el estado de una partida guardada (mejoras elegidas) sin emitir avisos de sinergia.
+func restore(saved_picks: Array, perm_levels: Dictionary, lo_stats: Dictionary, lvl: int) -> void:
+	picks.clear()
+	counts.clear()
+	active_synergies.clear()
+	perm = perm_levels.duplicate()
+	loadout_stats = lo_stats.duplicate()
+	level = lvl
+	for p in saved_picks:
+		var id := String(p["id"])
+		picks.append({"id": id, "rarity": int(p["rarity"])})
+		counts[id] = count_of(id) + 1
+	recompute(false)
+	# las sinergias ya activas no deben anunciarse otra vez
+	changed.emit()
 
 
 func count_of(id: String) -> int:
@@ -58,6 +76,13 @@ func recompute(announce: bool) -> void:
 				st[k] = float(st.get(k, 1.0)) * (1.0 + v)
 			else:
 				st[k] = float(st.get(k, 0.0)) + v
+	# equipamiento inicial (mismas reglas: "_x" multiplica, el resto suma)
+	for k in loadout_stats.keys():
+		var lv := float(loadout_stats[k])
+		if String(k).ends_with("_x"):
+			st[k] = float(st.get(k, 1.0)) * lv
+		else:
+			st[k] = float(st.get(k, 0.0)) + lv
 	# meta-progresión
 	st["max_hp_flat"] = float(perm.get("perm_hp", 0)) * 8.0 + level * 3.0
 	st["dmg_pct"] = float(st.get("dmg_pct", 0.0)) + float(perm.get("perm_dmg", 0)) * 0.04 + level * 0.015

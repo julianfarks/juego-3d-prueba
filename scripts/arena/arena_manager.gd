@@ -50,6 +50,7 @@ var _cleared_t := 0.0
 var _boss_dead_t := -1.0
 var _coin_sfx_t := 0.0
 var chest_taken := false
+var seed_used := 0                     # semilla de esta arena (se guarda para reconstruirla al cargar)
 
 
 func _ready() -> void:
@@ -62,8 +63,12 @@ func _ready() -> void:
 	GameState.arena = self
 
 
+## Objetivos de práctica de la Sala Central (muñecos). Si hay alguno, el combate apunta a ellos.
+var practice_targets: Array = []
+
+
 func get_enemies() -> Array:
-	return active
+	return practice_targets if not practice_targets.is_empty() else active
 
 
 func alive_count() -> int:
@@ -79,10 +84,8 @@ func start(idx: int, seed_value := -1) -> Vector3:
 	_teardown()
 	index = idx
 	kind = Scaling.kind_of(idx)
-	if seed_value >= 0:
-		rng.seed = seed_value
-	else:
-		rng.randomize()
+	seed_used = seed_value if seed_value >= 0 else (randi() & 0x7fffffff)
+	rng.seed = seed_used
 	GameState.arena = self
 	GameState.arena_index = idx
 	world_root = Node3D.new()
@@ -503,6 +506,7 @@ func _complete() -> void:
 	if kind != Scaling.KIND_BOSS:
 		AudioManager.play_music("combat")
 	GameState.toast_msg("¡ARENA COMPLETADA!", Color(0.5, 1.0, 0.6))
+	GameState.toast_msg("Abre el cofre y después cruza el portal", Color(1.0, 0.9, 0.4))
 	var heal := GameState.build.s("clear_heal")
 	if heal > 0.0 and GameState.player != null:
 		GameState.player.heal(GameState.player.max_hp * heal)
@@ -511,6 +515,8 @@ func _complete() -> void:
 
 
 func _spawn_rewards() -> void:
+	# posiciones de los premios reproducibles a partir de la semilla (para poder restaurarlas al cargar)
+	rng.seed = (seed_used ^ 0x5EED5) & 0x7fffffff
 	# cofre
 	var tint := Color(0.4, 0.85, 1.0)
 	var min_rarity := 0
@@ -524,7 +530,9 @@ func _spawn_rewards() -> void:
 	_chest = Interactable.new()
 	_chest.kind = "chest"
 	_chest.prompt = "Abrir cofre"
+	_chest.action_text = "ABRIR"
 	_chest.radius = 3.0
+	_chest.setup_indicator("ABRIR", 2.7, Color(1.0, 0.9, 0.35))
 	_chest.add_child(cv["root"])
 	_chest_lid = cv["lid"]
 	var cpos := _reward_spot(Vector3(-3.5, 0, 0))
@@ -541,6 +549,9 @@ func _spawn_rewards() -> void:
 	_portal.radius = 3.4
 	_portal.enabled = false
 	_portal.prompt = "Abre el cofre primero"
+	_portal.action_text = "ENTRAR"
+	_portal.setup_indicator("ABRE EL COFRE", 4.6, Color(0.8, 0.8, 0.9), false)
+	_portal.ind_scale = 0.5
 	_portal.add_child(pv["root"])
 	_portal.position = _reward_spot(Vector3(4.5, 0, 0))
 	_portal.callback = func(_i): _enter_portal()
@@ -554,7 +565,9 @@ func _spawn_rewards() -> void:
 		_shop = Interactable.new()
 		_shop.kind = "shop"
 		_shop.prompt = "Entrar a la tienda"
+		_shop.action_text = "TIENDA"
 		_shop.radius = 3.4
+		_shop.setup_indicator("TIENDA", 3.4, Color(0.6, 1.0, 0.7))
 		_shop.add_child(PropsFactory.shop_node())
 		_shop.position = _reward_spot(Vector3(0, 0, 5.5))
 		_shop.callback = func(_i): shop_requested.emit()
@@ -581,25 +594,51 @@ func _reward_spot(pref: Vector3) -> Vector3:
 
 
 func _open_chest(min_rarity: int) -> void:
-	if chest_taken:
-		return
+	if chest_taken or _chest == null:
+		return      # cada cofre se abre una sola vez
 	chest_taken = true
 	_chest.enabled = false
+	_chest.set_indicator("", Color.WHITE, false)
 	AudioManager.sfx("chest")
+	AudioManager.sfx("card", -3.0)
 	var tw := create_tween()
 	tw.tween_property(_chest_lid, "rotation:x", -1.9, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if GameState.fx != null:
-		GameState.fx.burst(_chest.global_position + Vector3(0, 0.8, 0), Color(1.0, 0.9, 0.4), 16, 6.0, 0.16, 0.7)
-		GameState.fx.flash_sphere(_chest.global_position + Vector3(0, 0.8, 0), 1.6, Color(1.0, 0.9, 0.5, 0.7), 0.35)
-	# activar portal
-	if _portal != null:
-		_portal.enabled = true
-		_portal.prompt = "Entrar al portal"
-		(_portal_vis["light"] as OmniLight3D).light_energy = 1.4
-		(_portal_vis["swirl"] as MeshInstance3D).visible = true
-		(_portal_vis["swirl2"] as MeshInstance3D).visible = true
-		AudioManager.sfx("portal", -4.0)
+		var cp := _chest.global_position + Vector3(0, 0.8, 0)
+		GameState.fx.burst(cp, Color(1.0, 0.9, 0.4), 22, 7.0, 0.18, 0.8)
+		GameState.fx.flash_sphere(cp, 1.8, Color(1.0, 0.9, 0.5, 0.75), 0.4)
+		GameState.fx.ring(_chest.global_position, 3.4, Color(1.0, 0.9, 0.4, 0.9), 0.6, 0.3)
+	GameState.toast_msg("¡Cofre abierto! Elige tu recompensa", Color(1.0, 0.9, 0.4))
+	_activate_portal()
 	chest_opened.emit(min_rarity)
+
+
+## Enciende el portal (cuando el cofre ya se abrió).
+func _activate_portal() -> void:
+	if _portal == null:
+		return
+	_portal.enabled = true
+	_portal.prompt = "Entrar al portal"
+	_portal.set_indicator("ENTRAR", Color(0.85, 0.6, 1.0), true)
+	(_portal_vis["light"] as OmniLight3D).light_energy = 1.4
+	(_portal_vis["swirl"] as MeshInstance3D).visible = true
+	(_portal_vis["swirl2"] as MeshInstance3D).visible = true
+	AudioManager.sfx("portal", -4.0)
+
+
+## Reconstruye una arena ya completada tras cargar una partida: aparecen el cofre y el portal.
+## 'taken': el cofre ya se había abierto y sus cartas elegidas (el portal queda activo).
+func restore_cleared(taken: bool) -> void:
+	phase = Phase.CLEARED
+	_queue.clear()
+	GameState.objective_changed.emit("¡Arena completada!", 1.0)
+	_spawn_rewards()
+	if taken:
+		chest_taken = true
+		_chest.enabled = false
+		_chest.set_indicator("", Color.WHITE, false)
+		_chest_lid.rotation.x = -1.9
+		_activate_portal()
 
 
 func _enter_portal() -> void:

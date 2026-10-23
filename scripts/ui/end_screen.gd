@@ -5,6 +5,7 @@ extends Control
 signal retry_pressed
 signal menu_pressed
 signal continue_pressed
+signal lobby_pressed
 
 
 func show_summary(sm: Dictionary, can_continue := false) -> void:
@@ -57,6 +58,9 @@ func show_summary(sm: Dictionary, can_continue := false) -> void:
 		var retry := UIKit.accent_button("Reintentar", Vector2(300, 70), 28)
 		retry.pressed.connect(func(): retry_pressed.emit())
 		row.add_child(retry)
-	var menu := UIKit.button("Menú principal", Vector2(300, 70), 26)
+	var lob := UIKit.button("Sala Central", Vector2(260, 70), 24)
+	lob.pressed.connect(func(): lobby_pressed.emit())
+	row.add_child(lob)
+	var menu := UIKit.button("Menú principal", Vector2(260, 70), 24)
 	menu.pressed.connect(func(): menu_pressed.emit())
 	row.add_child(menu)
