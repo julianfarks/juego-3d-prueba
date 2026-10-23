@@ -211,6 +211,7 @@ func _fight(delta: float) -> void:
 		waves_done = false
 	if bool(_plan["stream"]) and _survival_left > 0.0:
 		waves_done = false
+	alive = alive_count()
 	if waves_done and alive == 0 and _pending_spawns() == 0:
 		_complete()
 

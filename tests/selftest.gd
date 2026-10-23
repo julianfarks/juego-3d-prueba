@@ -8,6 +8,7 @@ var main: Node
 var out_dir := "/tmp/selftest"
 var max_arenas := 6
 var stress := false
+var start_idx := 0
 var report := {"started": "", "events": [], "errors": [], "arenas": [], "min_enemies": 9999, "max_enemies": 0, "max_projectiles": 0, "fps_samples": []}
 var _frame := 0
 
@@ -18,6 +19,8 @@ func _ready() -> void:
 			out_dir = a.substr(6)
 		elif a.begins_with("--arenas="):
 			max_arenas = int(a.substr(9))
+		elif a.begins_with("--start="):
+			start_idx = int(a.substr(8))
 		elif a == "--stress":
 			stress = true
 	DirAccess.make_dir_recursive_absolute(out_dir)
@@ -71,7 +74,10 @@ func _run() -> void:
 	Config.dev_god_mode = true
 	if stress:
 		_stress_build()
-	var idx := 0
+	var idx := start_idx
+	if idx > 0:
+		main._begin_arena(idx, true)
+		await _frames(5)
 	while idx < max_arenas:
 		var ok := await _play_arena(idx)
 		if not ok:
