@@ -111,7 +111,7 @@ func start(idx: int, seed_value := -1) -> Vector3:
 	Perks.fire("arena_start", {})
 	_announce()
 	GameState.objective_changed.emit(_objective_text(), 0.0)
-	return Vector3(0, 0.3, 0)
+	return Vector3(0, Terrain.ground_y(0.0, 0.0) + 0.3, 0)
 
 
 func _announce() -> void:
@@ -155,6 +155,7 @@ func _teardown() -> void:
 	_chest = null
 	_portal = null
 	_shop = null
+	Terrain.clear()
 	GameState.boss_bar.emit(false, "", 0.0, 1.0)
 
 
@@ -300,11 +301,11 @@ func spawn_point(min_player_dist := 9.0) -> Vector3:
 			continue
 		var d := Vector2(x - pp.x, z - pp.z).length()
 		if d >= min_player_dist:
-			return Vector3(x, 0.3, z)
+			return Vector3(x, Terrain.ground_y(x, z) + 0.3, z)
 		if d > best_d:
 			best_d = d
-			best = Vector3(x, 0.3, z)
-	return best if best_d >= 0.0 else Vector3(half * 0.6, 0.3, half * 0.6)
+			best = Vector3(x, Terrain.ground_y(x, z) + 0.3, z)
+	return best if best_d >= 0.0 else Vector3(half * 0.6, Terrain.ground_y(half * 0.6, half * 0.6) + 0.3, half * 0.6)
 
 
 func _get_enemy(k: String) -> Enemy:
@@ -326,6 +327,7 @@ func _spawn_enemy(k: String, at := Vector3.INF) -> Enemy:
 	var pos := at if at != Vector3.INF else spawn_point()
 	pos.x = clampf(pos.x, -half + 2.0, half - 2.0)
 	pos.z = clampf(pos.z, -half + 2.0, half - 2.0)
+	pos.y = Terrain.ground_y(pos.x, pos.z) + 0.3
 	var e := _get_enemy(k)
 	var affix := WaveDirector.roll_affix(index, k, rng)
 	e.setup(k, index, affix, pos, 999.0)
@@ -446,8 +448,9 @@ func _update_coins(delta: float) -> void:
 				continue
 		else:
 			vel.y -= 18.0 * delta
-			if pos.y <= 0.3 and vel.y < 0.0:
-				pos.y = 0.3
+			var gy := Terrain.ground_y(pos.x, pos.z) + 0.3
+			if pos.y <= gy and vel.y < 0.0:
+				pos.y = gy
 				vel.y = 0.0
 				vel.x *= 0.85
 				vel.z *= 0.85
@@ -540,6 +543,7 @@ func _spawn_rewards() -> void:
 	_chest.action_text = "ABRIR"
 	_chest.radius = 3.0
 	_chest.setup_indicator("ABRIR", 2.7, Color(1.0, 0.9, 0.35))
+	_chest.add_child(BiomeProps.chest_base(pal, tint))
 	_chest.add_child(cv["root"])
 	_chest_lid = cv["lid"]
 	var cpos := _reward_spot(Vector3(-3.5, 0, 0))
@@ -549,7 +553,7 @@ func _spawn_rewards() -> void:
 	if GameState.fx != null:
 		GameState.fx.ring(cpos, 3.0, Color(tint.r, tint.g, tint.b, 0.9), 0.7, 0.3)
 	# portal (se activa al abrir el cofre)
-	var pv := PropsFactory.portal_node()
+	var pv := PropsFactory.portal_node(pal.get("portal_tint", Color(0.65, 0.4, 1.0)), pal.get("portal_frame", Color(0.34, 0.36, 0.45)))
 	_portal_vis = pv
 	_portal = Interactable.new()
 	_portal.kind = "portal"
@@ -575,13 +579,19 @@ func _spawn_rewards() -> void:
 		_shop.action_text = "TIENDA"
 		_shop.radius = 3.4
 		_shop.setup_indicator("TIENDA", 3.4, Color(0.6, 1.0, 0.7))
-		_shop.add_child(PropsFactory.shop_node())
+		_shop.add_child(BiomeProps.shop(pal))
 		_shop.position = _reward_spot(Vector3(0, 0, 5.5))
 		_shop.callback = func(_i): shop_requested.emit()
 		world_root.add_child(_shop)
 
 
 func _reward_spot(pref: Vector3) -> Vector3:
+	var p := _reward_spot_flat(pref)
+	p.y = Terrain.ground_y(p.x, p.z)
+	return p
+
+
+func _reward_spot_flat(pref: Vector3) -> Vector3:
 	var p := pref
 	for _t in 12:
 		var ok := true

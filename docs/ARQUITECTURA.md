@@ -6,7 +6,7 @@
 - `scripts/combat/` — `Combat` (daño, críticos, procs, explosiones, cadenas), `Projectiles` (pool, sin físicas), `Feedback` (único punto de número flotante + sonido por impacto real: formato, estilos, prioridades, combos).
 - `scripts/player/` — `Player`, `Skills`, `CameraRig` (órbita, colisión de cámara sin tirones).
 - `scripts/enemy/` — `EnemyDefs` (datos), `Enemy` (máquina de estados, ataques telegrafiados, jefe por fases, estados alterados).
-- `scripts/arena/` — `ArenaBuilder`, `WaveDirector`, `Arena` (objetivos, oleadas, monedas, cofre/portal/tienda), `Interactable`.
+- `scripts/arena/` — `BiomeDB` (6 biomas, datos), `Terrain` (relieve + colisión), `BiomeScenery` (cielo, muros, edificios, fondo en capas), `BiomeProps` (props/tienda/cofre por bioma), `ArenaBuilder` (orden: reservar huecos → terreno → muros/fondo → colocar sobre el suelo), `WaveDirector`, `Arena` (objetivos, oleadas, monedas, cofre/portal/tienda), `Interactable`.
 - `scripts/ui/` — HUD, controles táctiles editables, cartas, tienda, menús, ajustes, pantalla final, herramientas de desarrollo.
 - `scripts/main.gd` — orquestador del flujo. `tests/selftest.gd` — autojuego.
 

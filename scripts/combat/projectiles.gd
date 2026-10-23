@@ -204,12 +204,17 @@ func _physics_process(delta: float) -> void:
 		# --- colisión con el mundo ---
 		if p.kind != "boomerang":
 			var q := PhysicsRayQueryParameters3D.create(p.pos, new_pos, Config.L_WORLD)
+			if Terrain.body_rid.is_valid():
+				q.exclude = [Terrain.body_rid]
 			var res := space.intersect_ray(q)
 			if not res.is_empty():
 				kill = true
 				new_pos = res["position"]
 				if GameState.fx != null:
 					GameState.fx.burst(new_pos, Color(1, 0.9, 0.6), 4, 3.0, 0.1, 0.3)
+			elif new_pos.y <= Terrain.ground_y(new_pos.x, new_pos.z) + 0.02:
+				kill = true      # tocó el suelo (el terreno no entra en el rayo: así no frena colinas bajas)
+				new_pos.y = Terrain.ground_y(new_pos.x, new_pos.z) + 0.02
 		p.pos = new_pos
 		# --- impactos ---
 		if not kill:

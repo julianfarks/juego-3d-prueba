@@ -279,19 +279,19 @@ static func coin_mesh() -> ArrayMesh:
 	return b.build()
 
 
-static func portal_node() -> Dictionary:
+static func portal_node(tint := Color(0.65, 0.4, 1.0), frame := Color(0.34, 0.36, 0.45)) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "PortalVisual"
 	var b := MeshBuilder.new()
-	b.cylinder(1.9, 2.1, 0.3, 12, _x(Vector3(0, 0.15, 0)), Color(0.28, 0.3, 0.38))
-	b.cylinder(1.7, 1.8, 0.1, 12, _x(Vector3(0, 0.33, 0)), _g(Color(0.5, 0.3, 0.9), 0.4))
+	b.cylinder(1.9, 2.1, 0.3, 12, _x(Vector3(0, 0.15, 0)), frame.darkened(0.2))
+	b.cylinder(1.7, 1.8, 0.1, 12, _x(Vector3(0, 0.33, 0)), _g(tint.darkened(0.25), 0.4))
 	var n := 14
 	for i in n:
 		var a := TAU * float(i) / n
 		var pos := Vector3(cos(a) * 1.7, 2.1 + sin(a) * 1.75, 0)
-		b.box(Vector3(0.55, 0.55, 0.5), _x(pos, Vector3(0, 0, rad_to_deg(a))), Color(0.34, 0.36, 0.45) if i % 2 == 0 else Color(0.28, 0.3, 0.38))
+		b.box(Vector3(0.55, 0.55, 0.5), _x(pos, Vector3(0, 0, rad_to_deg(a))), frame if i % 2 == 0 else frame.darkened(0.18))
 		if i % 2 == 0:
-			b.box(Vector3(0.12, 0.2, 0.52), _x(pos, Vector3(0, 0, rad_to_deg(a))), _g(Color(0.7, 0.45, 1.0), 1.0))
+			b.box(Vector3(0.12, 0.2, 0.52), _x(pos, Vector3(0, 0, rad_to_deg(a))), _g(tint.lightened(0.1), 1.0))
 	Mats.mesh_instance(b.build(), Mats.world_material(), root)
 	# disco interior (swirl)
 	var swirl := MeshInstance3D.new()
@@ -301,7 +301,7 @@ static func portal_node() -> Dictionary:
 	cm.height = 0.02
 	cm.radial_segments = 20
 	swirl.mesh = cm
-	swirl.material_override = Mats.fx_material(Color(0.55, 0.3, 1.0, 0.65), true)
+	swirl.material_override = Mats.fx_material(Color(tint.r * 0.85, tint.g * 0.85, tint.b, 0.65), true)
 	swirl.position = Vector3(0, 2.1, 0)
 	swirl.rotation_degrees.x = 90
 	swirl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -313,13 +313,13 @@ static func portal_node() -> Dictionary:
 	cm2.height = 0.02
 	cm2.radial_segments = 6
 	swirl2.mesh = cm2
-	swirl2.material_override = Mats.fx_material(Color(0.9, 0.7, 1.0, 0.5), true)
+	swirl2.material_override = Mats.fx_material(Color(tint.lightened(0.45).r, tint.lightened(0.45).g, tint.lightened(0.45).b, 0.5), true)
 	swirl2.position = Vector3(0, 2.1, 0.02)
 	swirl2.rotation_degrees.x = 90
 	swirl2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(swirl2)
 	var light := OmniLight3D.new()
-	light.light_color = Color(0.65, 0.4, 1.0)
+	light.light_color = tint
 	light.light_energy = 1.2
 	light.omni_range = 7.0
 	light.position = Vector3(0, 2.0, 0.5)

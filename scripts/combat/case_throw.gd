@@ -244,7 +244,7 @@ func _spawn_case(i: int, spec: Dictionary, p: Dictionary, dir: Vector3, origin: 
 	c.pierce_left = int(p["pierce"])
 	c.bounces_left = int(p["bounces"])
 	c.wall_left = float(p["wall_t"])
-	c.pos = Vector3(origin.x, HIT_Y, origin.z)
+	c.pos = Vector3(origin.x, Terrain.ground_y(origin.x, origin.z) + HIT_Y, origin.z)
 	var flat_dir := Vector3(dir.x, 0.0, dir.z).normalized() if Vector3(dir.x, 0.0, dir.z).length() > 0.01 else Vector3.FORWARD
 	# arco: el ángulo total que gira en el trayecto es proporcional a la curvatura del arma
 	var t_out := c.range_m / c.speed
@@ -378,9 +378,13 @@ func _step_case(c: C, delta: float, space: PhysicsDirectSpaceState3D) -> bool:
 	if c.life > 5.5 and c.state != "ret":
 		_begin_return(c)
 	var new_pos := c.pos + c.vel * delta
+	if c.state != "ret":
+		new_pos.y = Terrain.ground_y(new_pos.x, new_pos.z) + HIT_Y    # el maletín sigue el relieve a altura constante
 	# --- mundo: rebote por el entorno o regreso (en el regreso se atraviesa todo para garantizar la vuelta) ---
 	if c.state != "ret":
 		var q := PhysicsRayQueryParameters3D.create(c.pos, new_pos, Config.L_WORLD)
+		if Terrain.body_rid.is_valid():
+			q.exclude = [Terrain.body_rid]     # las colinas no frenan el vuelo: solo muros y obstáculos
 		var res := space.intersect_ray(q)
 		if not res.is_empty():
 			var n: Vector3 = res["normal"]

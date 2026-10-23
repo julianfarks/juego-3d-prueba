@@ -81,6 +81,14 @@ func _ready() -> void:
 			add_child(cnode)
 			cnode.set("main", self)
 		return
+	if Config.cmd_flag("--biometest"):
+		var bmt := load("res://tests/biometest.gd")
+		if bmt != null:
+			var bmn: Node = bmt.new()
+			bmn.name = "BiomeTest"
+			add_child(bmn)
+			bmn.set("main", self)
+		return
 	if Config.cmd_flag("--fbtest"):
 		var bt := load("res://tests/fbtest.gd")
 		if bt != null:
@@ -598,10 +606,109 @@ func _start_run(resume: Dictionary = {}) -> void:
 	_begin_arena(int(resume["arena_index"]) if restoring else 0, true, resume)
 
 
+## ¿Esta arena inaugura una región nueva? (la primera de la partida o la que sigue a un jefe de zona)
+func _region_changed(idx: int) -> bool:
+	return idx == 0 or BiomeDB.biome_index(idx) != BiomeDB.biome_index(idx - 1)
+
+
+var _bars: Array = []
+
+
+## Cubre la pantalla con la transición propia del bioma al que se entra (varía: fundido, destello, barras, polvo, iris).
+func _region_cover(bm: Dictionary) -> void:
+	var col: Color = bm["trans_color"]
+	fade.color = Color(col.r, col.g, col.b, fade.color.a)
+	AudioManager.sfx("portal", -2.0)
+	match String(bm["trans"]):
+		"flash":
+			await _fade_to(1.0, 0.14)
+		"bars":
+			var vp := get_viewport().get_visible_rect().size
+			for i in 2:
+				var bar := ColorRect.new()
+				bar.color = col.darkened(0.2)
+				bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				bar.anchor_right = 1.0
+				bar.anchor_top = 0.0 if i == 0 else 1.0
+				bar.anchor_bottom = 0.0 if i == 0 else 1.0
+				fade_layer.add_child(bar)
+				fade_layer.move_child(bar, fade.get_index())
+				_bars.append(bar)
+				var tw := create_tween()
+				if i == 0:
+					tw.tween_property(bar, "offset_bottom", vp.y * 0.52, 0.32).set_trans(Tween.TRANS_CUBIC)
+				else:
+					tw.tween_property(bar, "offset_top", -vp.y * 0.52, 0.32).set_trans(Tween.TRANS_CUBIC)
+			await get_tree().create_timer(0.34).timeout
+			fade.color = Color(col.r, col.g, col.b, 1.0)
+		"dust":
+			await _fade_to(1.0, 0.6)
+		"iris":
+			await _fade_to(1.0, 0.5)
+		_:
+			await _fade_to(1.0, 0.4)
+
+
+func _region_reveal() -> void:
+	await _fade_to(0.0, 0.45)
+	for bar in _bars:
+		if is_instance_valid(bar):
+			bar.queue_free()
+	_bars.clear()
+	fade.color = Color(0, 0, 0, 0)
+
+
+var _region_banner: Control
+
+
+## Cartel con el nombre de la región. 'hold' = segundos visible.
+func _show_region_banner(idx: int, hold: float) -> void:
+	var bm := BiomeDB.for_arena(idx)
+	if _region_banner != null and is_instance_valid(_region_banner):
+		_region_banner.queue_free()
+	var root := Control.new()
+	root.name = "RegionBanner"
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UIKit.theme()
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.custom_minimum_size = Vector2(900, 0)
+	box.position = Vector2(-450, -120)
+	root.add_child(box)
+	var accent: Color = bm["accent"]
+	var l1 := UIKit.label("REGIÓN %d" % (Scaling.cycle_of(idx) + 1), 30, accent.lightened(0.2), HORIZONTAL_ALIGNMENT_CENTER)
+	var l2 := UIKit.title(String(bm["name"]).to_upper(), 58)
+	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l2.add_theme_color_override("font_color", Color(1, 1, 1))
+	l2.add_theme_color_override("font_outline_color", accent.darkened(0.55))
+	l2.add_theme_constant_override("outline_size", 10)
+	var l3 := UIKit.label(String(bm["region"]), 26, Color(0.92, 0.92, 0.95), HORIZONTAL_ALIGNMENT_CENTER)
+	for l in [l1, l2, l3]:
+		(l as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(l)
+	root.modulate.a = 0.0
+	fade_layer.add_child(root)
+	_region_banner = root
+	var tw := create_tween()
+	tw.tween_property(root, "modulate:a", 1.0, 0.3)
+	tw.tween_interval(hold)
+	tw.tween_property(root, "modulate:a", 0.0, 0.45)
+	tw.tween_callback(root.queue_free)
+
+
 func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	_transitioning = true
+	var region := _region_changed(idx)
+	var bm := BiomeDB.for_arena(idx)
 	if not instant:
-		await _fade_to(1.0, 0.25)
+		if region:
+			await _region_cover(bm)
+		else:
+			await _fade_to(1.0, 0.25)
 	projectiles.clear_all()
 	if GameState.case_throw != null:
 		GameState.case_throw.clear_all()
@@ -612,7 +719,9 @@ func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 		# la arena ya estaba superada: reaparecen el cofre y el portal tal como estaban
 		arena.restore_cleared(stage_name == "portal")
 		var pp: Array = resume["player_pos"]
-		pos = Vector3(clampf(float(pp[0]), -arena.half + 1.5, arena.half - 1.5), 0.3, clampf(float(pp[2]), -arena.half + 1.5, arena.half - 1.5))
+		var rx := clampf(float(pp[0]), -arena.half + 1.5, arena.half - 1.5)
+		var rz := clampf(float(pp[2]), -arena.half + 1.5, arena.half - 1.5)
+		pos = Vector3(rx, Terrain.ground_y(rx, rz) + 0.3, rz)
 	player.teleport_to(pos)
 	player.iframes = maxf(player.iframes, 1.2)
 	cam.yaw = 0.0
@@ -620,7 +729,15 @@ func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	if idx > 0 and Scaling.zone_pos(idx) == 0 and (not restoring or stage_name == "fight"):
 		GameState.toast_msg("Ciclo %d · los enemigos siguen endureciéndose poco a poco" % (Scaling.cycle_of(idx) + 1), Color(1.0, 0.4, 0.3))
 	AudioManager.play_music("combat")
-	await _fade_to(0.0, 0.3)
+	if region and not instant:
+		player.iframes = maxf(player.iframes, 3.0)
+		_show_region_banner(idx, 1.15)
+		await get_tree().create_timer(1.25).timeout
+		await _region_reveal()
+	else:
+		await _fade_to(0.0, 0.3)
+		if region:
+			_show_region_banner(idx, 1.3)
 	_transitioning = false
 	if not restoring:
 		_autosave("fight")
