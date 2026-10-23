@@ -36,6 +36,14 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.3.0 — builds acumulables y dificultad continua
+- **Mejoras con nivel (hasta 50).** Cada mejora muestra "NIVEL n → n+1" y su máximo propio (de 2 a 50). Daño de Maletín, Velocidad de ataque, Ojo de Perito, Salud, Barrido (radio), Armadura… suben de verdad en cada nivel. Una mejora al nivel máximo, o cuya estadística ya tocó su límite duro, **no vuelve a salir** en cofres ni tiendas.
+- **Hitos cada 10 niveles** (p. ej. Maletín: ×1.10 de daño total en 10, 20, 30, 40 y 50) y **7 sinergias por nivel** nuevas (Maestro del Maletín, Artillería Total, Aplastamiento Crítico…). Se calculan siempre desde cero, así que nada se aplica dos veces.
+- **Cofres:** la 2.ª carta sale de las mejoras que ya llevas (para poder profundizar una build), y el equipamiento de la Sala Central hace salir más las mejoras afines. La carta muestra el cambio real ("Daño 256% → 272%") y los hitos próximos.
+- **Dificultad continua:** vida, daño, cantidad, velocidad, afijos, resistencia y ritmo de ataque de élites/jefes dependen solo del número de arena (sin escalones cada 5 arenas, sin efecto de tiendas ni mejoras). Peor salto entre rondas: vida +12%, daño +7%.
+- Pruebas numéricas: `godot --headless res://tests/progression_test.tscn` (77 comprobaciones + tablas de progresión).
+- Una sola release en GitHub ("ultima-version") que se sobrescribe con el APK nuevo.
+
 ## Novedades 0.2.0
 - **Guardar y continuar partida**: guardado atómico con copia de seguridad y validación; autoguardado al empezar
   cada arena, al completarla y al recoger la recompensa; CONTINUAR / NUEVA PARTIDA (con aviso antes de

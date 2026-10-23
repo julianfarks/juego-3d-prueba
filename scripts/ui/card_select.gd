@@ -81,7 +81,6 @@ func _rebuild() -> void:
 		c.queue_free()
 	_card_nodes.clear()
 	var b: Build = GameState.build
-	var synergies := UpgradeDB.synergies()
 	for i in _cards.size():
 		var card: Dictionary = _cards[i]
 		var d := UpgradeDB.get_def(card["id"])
@@ -107,18 +106,24 @@ func _rebuild() -> void:
 		nm.custom_minimum_size = Vector2(290, 0)
 		v.add_child(nm)
 		v.add_child(UIKit.label(String(UpgradeDB.CATEGORY_NAMES[d["cat"]]), 18, ccol, HORIZONTAL_ALIGNMENT_CENTER))
-		var ds := UIKit.label(UpgradeDB.describe(card["id"], rar), 21, UIKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		var ds := UIKit.label(UpgradeDB.describe(card["id"], rar), 19, UIKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 		ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ds.custom_minimum_size = Vector2(290, 0)
 		ds.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		v.add_child(ds)
 		var have := b.count_of(card["id"])
-		var stack := UIKit.label("Nuevo" if have == 0 else "Apilado: x%d → x%d" % [have, have + 1], 18, UIKit.GOOD if have == 0 else UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
-		v.add_child(stack)
-		# ¿sinergia posible?
-		var syn_name := _synergy_hint(card["id"], synergies, b)
+		var cap := mini(int(d["max"]), UpgradeDB.MAX_LEVEL)
+		var lvl_txt := "NUEVA · NIVEL 1" if have == 0 else "NIVEL %d → %d  (máx. %d)" % [have, have + 1, cap]
+		v.add_child(UIKit.label(lvl_txt, 20, UIKit.GOOD if have == 0 else UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+		# qué cambia exactamente en tu build con esta elección
+		for line in UpgradeDB.preview_lines(card["id"], rar, b):
+			var pl := UIKit.label(String(line), 16, Color(0.75, 0.95, 0.8), HORIZONTAL_ALIGNMENT_CENTER)
+			pl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			pl.custom_minimum_size = Vector2(290, 0)
+			v.add_child(pl)
+		var syn_name := UpgradeDB.synergy_hint(card["id"], b)
 		if syn_name != "":
-			var sl := UIKit.label("★ Sinergia: " + syn_name, 17, Color(1.0, 0.85, 0.3), HORIZONTAL_ALIGNMENT_CENTER)
+			var sl := UIKit.label("★ Sinergia: " + syn_name, 16, Color(1.0, 0.85, 0.3), HORIZONTAL_ALIGNMENT_CENTER)
 			sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			sl.custom_minimum_size = Vector2(290, 0)
 			v.add_child(sl)
@@ -131,17 +136,6 @@ func _rebuild() -> void:
 		var tw := create_tween().set_parallel(true)
 		tw.tween_property(pc, "modulate:a", 1.0, 0.25).set_delay(0.08 * i)
 		tw.tween_property(pc, "scale", Vector2.ONE, 0.3).set_delay(0.08 * i).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-
-func _synergy_hint(id: String, synergies: Array, b: Build) -> String:
-	var d := UpgradeDB.get_def(id)
-	for s in synergies:
-		if b.active_synergies.has(s["id"]):
-			continue
-		for key in (s["needs"] as Dictionary).keys():
-			if (d["stats"] as Dictionary).has(key):
-				return String(s["name"])
-	return ""
 
 
 func _on_card_input(event: InputEvent, i: int) -> void:
@@ -190,7 +184,7 @@ func _on_confirm() -> void:
 	GameState.build_changed.emit()
 	AudioManager.sfx("card")
 	var d := UpgradeDB.get_def(card["id"])
-	GameState.toast_msg("%s  (%s)" % [d["name"], UpgradeDB.RARITY_NAMES[card["rarity"]]], UpgradeDB.RARITY_COLORS[card["rarity"]])
+	GameState.toast_msg("%s — NIVEL %d  (%s)" % [d["name"], GameState.build.count_of(card["id"]), UpgradeDB.RARITY_NAMES[card["rarity"]]], UpgradeDB.RARITY_COLORS[card["rarity"]])
 	picked.emit(card)
 	_close()
 

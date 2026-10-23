@@ -568,7 +568,7 @@ func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	cam.yaw = 0.0
 	cam.snap_to_target()
 	if idx > 0 and Scaling.zone_pos(idx) == 0 and (not restoring or stage_name == "fight"):
-		GameState.toast_msg("¡CICLO %d! Los enemigos son más fuertes" % (Scaling.cycle_of(idx) + 1), Color(1.0, 0.4, 0.3))
+		GameState.toast_msg("Ciclo %d · los enemigos siguen endureciéndose poco a poco" % (Scaling.cycle_of(idx) + 1), Color(1.0, 0.4, 0.3))
 	AudioManager.play_music("combat")
 	await _fade_to(0.0, 0.3)
 	_transitioning = false

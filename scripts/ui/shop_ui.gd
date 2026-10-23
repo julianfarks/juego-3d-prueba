@@ -75,7 +75,7 @@ func _generate(depth: int) -> void:
 				continue
 			picked[c["id"]] = true
 			got += 1
-			_offers.append({"type": "card", "card": c, "name": d["name"], "desc": UpgradeDB.describe(c["id"], c["rarity"]), "icon": d["icon"],
+			_offers.append({"type": "card", "card": c, "name": "%s · NIVEL %d → %d" % [d["name"], b.count_of(c["id"]), b.count_of(c["id"]) + 1], "desc": UpgradeDB.describe(c["id"], c["rarity"]), "icon": d["icon"],
 				"color": UpgradeDB.CATEGORY_COLORS.get(d["cat"], Color.WHITE), "base": base * (1.0 + 0.7 * int(c["rarity"])), "sold": false, "label": label})
 	take.call(ATTR_CATS, 2, 0, float(Config.ECONOMY["attr_price"]), "Atributo")
 	take.call(SKILL_CATS, 1, 0, float(Config.ECONOMY["skill_price"]), "Habilidad")

@@ -63,54 +63,12 @@ func has_synergy(id: String) -> bool:
 
 
 func recompute(announce: bool) -> void:
-	var st: Dictionary = {}
-	for p in picks:
-		var d := UpgradeDB.get_def(p["id"])
-		if d.is_empty():
-			continue
-		var sc := UpgradeDB.rarity_scale(d, int(p["rarity"]))
-		var dstats: Dictionary = d["stats"]
-		for k in dstats.keys():
-			var v := float(dstats[k]) * sc
-			if String(k).ends_with("_x"):
-				st[k] = float(st.get(k, 1.0)) * (1.0 + v)
-			else:
-				st[k] = float(st.get(k, 0.0)) + v
-	# equipamiento inicial (mismas reglas: "_x" multiplica, el resto suma)
-	for k in loadout_stats.keys():
-		var lv := float(loadout_stats[k])
-		if String(k).ends_with("_x"):
-			st[k] = float(st.get(k, 1.0)) * lv
-		else:
-			st[k] = float(st.get(k, 0.0)) + lv
-	# meta-progresión
-	st["max_hp_flat"] = float(perm.get("perm_hp", 0)) * 8.0 + level * 3.0
-	st["dmg_pct"] = float(st.get("dmg_pct", 0.0)) + float(perm.get("perm_dmg", 0)) * 0.04 + level * 0.015
-	st["luck"] = float(st.get("luck", 0.0)) + float(perm.get("perm_luck", 0)) * 0.06
-	st["move_speed"] = float(st.get("move_speed", 0.0)) + float(perm.get("perm_speed", 0)) * 0.03
-	st["regen"] = float(st.get("regen", 0.0)) + float(perm.get("perm_regen", 0)) * 0.6
-	# sinergias
+	var res := Build.compute(picks, perm, loadout_stats, level)
+	stats = res["stats"]
 	var newly: Array = []
 	for syn in UpgradeDB.synergies():
-		var ok := true
-		for need_key in (syn["needs"] as Dictionary).keys():
-			if float(st.get(need_key, 0.0)) < float(syn["needs"][need_key]):
-				ok = false
-				break
-		if ok:
-			for gk in (syn["gives"] as Dictionary).keys():
-				var gv := float((syn["gives"] as Dictionary)[gk])
-				if String(gk).ends_with("_x"):
-					st[gk] = float(st.get(gk, 1.0)) * (1.0 + gv)
-				else:
-					st[gk] = float(st.get(gk, 0.0)) + gv
-			if not active_synergies.has(syn["id"]):
-				newly.append(syn)
-	# límites duros
-	for ck in UpgradeDB.CAPS.keys():
-		if st.has(ck):
-			st[ck] = minf(float(st[ck]), float(UpgradeDB.CAPS[ck]))
-	stats = st
+		if (res["syn"] as Array).has(syn["id"]) and not active_synergies.has(syn["id"]):
+			newly.append(syn)
 	for syn in newly:
 		active_synergies.append(syn["id"])
 		if announce:
@@ -118,12 +76,83 @@ func recompute(announce: bool) -> void:
 	changed.emit()
 
 
+## Cálculo PURO de las estadísticas a partir de las mejoras elegidas (sin estado ni señales).
+## Devuelve {"stats": Dictionary, "syn": Array[String]}. Siempre se parte de cero: recalcular dos veces da
+## exactamente lo mismo, así que ninguna sinergia ni hito puede aplicarse dos veces.
+static func compute(p_picks: Array, p_perm: Dictionary, p_loadout: Dictionary, p_level: int) -> Dictionary:
+	var st: Dictionary = {}
+	var lv: Dictionary = {}
+	for p in p_picks:
+		var d := UpgradeDB.get_def(p["id"])
+		if d.is_empty():
+			continue
+		lv[p["id"]] = int(lv.get(p["id"], 0)) + 1
+		var sc := UpgradeDB.rarity_scale(d, int(p["rarity"]))
+		var dstats: Dictionary = d["stats"]
+		for k in dstats.keys():
+			_accumulate(st, String(k), float(dstats[k]) * sc)
+	# hitos: cada MILESTONE_EVERY niveles de una mejora otorgan su bonus (no depende de la rareza)
+	for id in lv.keys():
+		var d2 := UpgradeDB.get_def(id)
+		if not d2.has("mile"):
+			continue
+		var reached := UpgradeDB.milestones_at(int(lv[id]))
+		for k in (d2["mile"] as Dictionary).keys():
+			for _i in reached:
+				_accumulate(st, String(k), float(d2["mile"][k]))
+	# equipamiento inicial (mismas reglas: "_x" multiplica, el resto suma)
+	for k in p_loadout.keys():
+		var lvv := float(p_loadout[k])
+		if String(k).ends_with("_x"):
+			st[k] = float(st.get(k, 1.0)) * lvv
+		else:
+			st[k] = float(st.get(k, 0.0)) + lvv
+	# meta-progresión
+	st["max_hp_flat"] = float(p_perm.get("perm_hp", 0)) * 8.0 + p_level * 3.0
+	st["dmg_pct"] = float(st.get("dmg_pct", 0.0)) + float(p_perm.get("perm_dmg", 0)) * 0.04 + p_level * 0.015
+	st["luck"] = float(st.get("luck", 0.0)) + float(p_perm.get("perm_luck", 0)) * 0.06
+	st["move_speed"] = float(st.get("move_speed", 0.0)) + float(p_perm.get("perm_speed", 0)) * 0.03
+	st["regen"] = float(st.get("regen", 0.0)) + float(p_perm.get("perm_regen", 0)) * 0.6
+	# sinergias (cada una como máximo UNA vez)
+	var active: Array = []
+	for syn in UpgradeDB.synergies():
+		var ok := true
+		for need_key in (syn["needs"] as Dictionary).keys():
+			if float(st.get(need_key, 0.0)) < float(syn["needs"][need_key]):
+				ok = false
+				break
+		if ok:
+			for lk in (syn.get("lv", {}) as Dictionary).keys():
+				if int(lv.get(lk, 0)) < int(syn["lv"][lk]):
+					ok = false
+					break
+		if ok:
+			for gk in (syn["gives"] as Dictionary).keys():
+				_accumulate(st, String(gk), float((syn["gives"] as Dictionary)[gk]))
+			active.append(syn["id"])
+	# límites duros
+	for ck in UpgradeDB.CAPS.keys():
+		if st.has(ck):
+			st[ck] = minf(float(st[ck]), float(UpgradeDB.CAPS[ck]))
+	return {"stats": st, "syn": active}
+
+
+static func _accumulate(st: Dictionary, k: String, v: float) -> void:
+	if k.ends_with("_x"):
+		st[k] = float(st.get(k, 1.0)) * (1.0 + v)
+	else:
+		st[k] = float(st.get(k, 0.0)) + v
+
+
 ## Estimación del multiplicador de daño total (para el indicador de "poder de build").
 func power_rating() -> float:
 	var r := 1.0 + s("dmg_pct")
 	r *= s("more_dmg_x")
-	r *= 1.0 + s("crit_chance") * (0.75 + s("crit_mult"))
+	r *= 1.0 + minf(s("crit_chance") + 0.05, 1.0) * (0.75 + s("crit_mult"))
 	r *= 1.0 + s("atk_speed")
+	r *= 1.0 + s("aoe_pct") * 0.5                 # radio mayor => golpea a más enemigos
+	r *= 1.0 + s("echo_wave") * 0.3 + s("boomerang") * 0.3 + s("kill_nova") * 0.15
+	r *= 1.0 + s("crit_explosion") * 0.15 * minf(s("crit_chance") + 0.05, 1.0)
 	r *= 1.0 + active_synergies.size() * 0.15
 	return r
 
@@ -134,5 +163,5 @@ func summary_lines() -> Array:
 	ids.sort()
 	for id in ids:
 		var d := UpgradeDB.get_def(id)
-		out.append("%s x%d" % [d.get("name", id), counts[id]])
+		out.append("%s — NIVEL %d" % [d.get("name", id), counts[id]])
 	return out

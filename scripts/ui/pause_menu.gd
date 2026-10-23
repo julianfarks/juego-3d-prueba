@@ -51,8 +51,9 @@ func _show_build() -> void:
 		lines = ["Aún no tienes mejoras. ¡Abre cofres!"]
 	for l in lines:
 		lv.add_child(UIKit.label("• " + String(l), 22))
-	for sid in b.active_synergies:
-		lv.add_child(UIKit.label("★ Sinergia activa: " + String(sid), 22, Color(1.0, 0.85, 0.3)))
+	for syn in UpgradeDB.synergies():
+		if b.active_synergies.has(syn["id"]):
+			lv.add_child(UIKit.label("★ %s: %s" % [syn["name"], syn["desc"]], 20, Color(1.0, 0.85, 0.3)))
 	var c := UIKit.accent_button("Cerrar", Vector2(240, 60), 24)
 	c.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	c.pressed.connect(box.queue_free)

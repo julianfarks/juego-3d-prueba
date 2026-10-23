@@ -84,13 +84,17 @@ jobs:
           name: LawyerMayhem3D-debug-apk
           path: build/LawyerMayhem3D-debug.apk
 
-      - name: Publicar Release (nightly)
+      - name: Publicar Release única ("ultima-version", se sobrescribe en cada subida)
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="build-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" build/LawyerMayhem3D-debug.apk \
-            --title "Lawyer Mayhem 3D (build ${GITHUB_RUN_NUMBER})" \
-            --notes "APK de depuración generado automáticamente desde ${GITHUB_SHA}. Instalar permitiendo orígenes desconocidos." \
+          # una sola release: se borra la anterior (y las antiguas build-N) y se crea de nuevo con el APK nuevo
+          for t in $(gh release list --limit 200 --json tagName --jq '.[].tagName' | grep -E '^(build-[0-9]+|ultima-version)$' || true); do
+            gh release delete "$t" --cleanup-tag --yes || true
+          done
+          gh release create ultima-version build/LawyerMayhem3D-debug.apk \
+            --target "$GITHUB_SHA" \
+            --title "Lawyer Mayhem 3D - ultima version (build ${GITHUB_RUN_NUMBER})" \
+            --notes "APK de depuracion generado automaticamente desde ${GITHUB_SHA}. Se reemplaza en cada subida. Instalar permitiendo origenes desconocidos." \
             --prerelease

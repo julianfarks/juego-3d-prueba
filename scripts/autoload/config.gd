@@ -4,7 +4,7 @@ extends Node
 ## cada enemigo individualmente.
 
 const GAME_NAME := "LAWYER MAYHEM 3D"
-const VERSION := "0.2.0"
+const VERSION := "0.3.0"
 
 # Capas de física (máscaras de bits)
 const L_WORLD := 1
@@ -42,21 +42,21 @@ const SKILLS := {
 }
 
 # --- Escalado de dificultad (ver Scaling) ------------------------------------
+## Curva de dificultad CONTINUA: depende solo del índice de arena (y de la dificultad elegida), nunca de tiendas,
+## mejoras ni portales. Cada magnitud crece un pequeño % por arena (lineal + exponencial suave).
 const SCALING := {
-	"arenas_per_zone": 5,
-	"hp_per_arena": 0.11,
-	"hp_per_cycle": 1.5,
-	"dmg_per_arena": 0.06,
-	"dmg_per_cycle": 1.28,
-	"count_per_arena": 0.08,
-	"count_per_cycle": 0.4,
+	"arenas_per_zone": 5,           # solo rota el TIPO de arena (eliminación, supervivencia…); no sube la dificultad
+	"hp_lin": 0.09, "hp_exp": 1.03,        # vida = (1 + lin·a) · exp^a
+	"dmg_lin": 0.045, "dmg_exp": 1.02,       # daño = (1 + lin·a) · exp^a
+	"count_per_arena": 0.06, "count_cap": 4.0,   # cantidad: crece y satura suavemente hacia el tope
 	"spawn_interval_base": 2.3,
 	"spawn_interval_decay": 0.94,
 	"spawn_interval_min": 0.55,
 	"reward_per_arena": 0.08,
-	"reward_per_cycle": 0.35,
-	"speed_per_cycle": 0.06,
-	"speed_cap": 1.35,
+	"speed_per_arena": 0.005, "speed_cap": 1.35,
+	"affix_start": 4, "affix_per_arena": 0.02, "affix_cap": 0.6,
+	"resist_per_arena": 0.006, "resist_cap": 0.4,    # resistencia de élites y jefes (reduce el daño que reciben)
+	"pace_per_arena": 0.006, "pace_min": 0.6,        # élites y jefes atacan con más frecuencia
 }
 
 # --- Presets de calidad -----------------------------------------------------

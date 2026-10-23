@@ -117,7 +117,7 @@ func _phase_b() -> void:
 	GameState.restore_run(r)
 	ok(GameState.coins == 321 and GameState.kills == 44 and GameState.level == 3, "B8 GameState restaurado (monedas, bajas, nivel)")
 	ok(GameState.build.count_of("wide_sweep") == 2, "B9 la build restaurada tiene las mejoras")
-	ok(absf(GameState.build.s("aoe_pct") - 0.12 * (UpgradeDB.rarity_scale(UpgradeDB.get_def("wide_sweep"), 1) + UpgradeDB.rarity_scale(UpgradeDB.get_def("wide_sweep"), 0))) < 0.0001, "B10 las estadísticas de la build se recalculan igual")
+	ok(absf(GameState.build.s("aoe_pct") - 0.03 * (UpgradeDB.rarity_scale(UpgradeDB.get_def("wide_sweep"), 1) + UpgradeDB.rarity_scale(UpgradeDB.get_def("wide_sweep"), 0))) < 0.0001, "B10 las estadísticas de la build se recalculan igual")
 	ok(Scaling.diff_id == "partner", "B11 la dificultad restaurada llega a Scaling")
 	ok(int(SaveSystem.data["stats"]["runs"]) == int(e["stats_runs"]), "B12 reanudar no cuenta como partida nueva")
 	GameState.flush_stats()
@@ -205,7 +205,7 @@ func _phase_c() -> void:
 	ok(rew["intern"] < rew["associate"] and rew["associate"] < rew["partner"] and rew["partner"] < rew["prosecutor"], "C4 las recompensas suben con la dificultad")
 	Scaling.set_difficulty("associate")
 	var base_hp := Scaling.hp_mult(4)
-	ok(absf(base_hp - (1.0 + 0.11 * 4)) < 0.0001, "C5 Asociado conserva el equilibrio original")
+	ok(absf(base_hp - (1.0 + 0.09 * 4) * pow(1.03, 4)) < 0.0001, "C5 Asociado usa la curva continua nueva")
 	# honorarios
 	GameState.start_run()
 	GameState.run_stats["arenas"] = 5

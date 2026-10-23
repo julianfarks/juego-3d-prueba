@@ -48,19 +48,23 @@ static func kind_of(arena_index: int) -> String:
 	return KINDS[zone_pos(arena_index)]
 
 
+## Todas las magnitudes son FUNCIONES PURAS del índice de arena (+ dificultad elegida y multiplicador de desarrollador).
+## No leen la build, la tienda, los cofres ni el portal: la dificultad y el poder del jugador son sistemas separados.
 static func hp_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["hp_per_arena"]) * arena_index) * pow(float(c["hp_per_cycle"]), cycle_of(arena_index)) * dev_mult * diff_x("hp_x")
+	return (1.0 + float(c["hp_lin"]) * arena_index) * pow(float(c["hp_exp"]), arena_index) * dev_mult * diff_x("hp_x")
 
 
 static func dmg_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["dmg_per_arena"]) * arena_index) * pow(float(c["dmg_per_cycle"]), cycle_of(arena_index)) * (1.0 + (dev_mult - 1.0) * 0.5) * diff_x("dmg_x")
+	return (1.0 + float(c["dmg_lin"]) * arena_index) * pow(float(c["dmg_exp"]), arena_index) * (1.0 + (dev_mult - 1.0) * 0.5) * diff_x("dmg_x")
 
 
+## Cantidad: 1 + (tope-1)·(1 - e^(-k·a/(tope-1))). Pendiente inicial = count_per_arena y satura sin escalones.
 static func count_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["count_per_arena"]) * arena_index + float(c["count_per_cycle"]) * cycle_of(arena_index)) * diff_x("count_x")
+	var span := float(c["count_cap"]) - 1.0
+	return (1.0 + span * (1.0 - exp(-float(c["count_per_arena"]) * arena_index / span))) * diff_x("count_x")
 
 
 static func spawn_interval(arena_index: int) -> float:
@@ -70,22 +74,50 @@ static func spawn_interval(arena_index: int) -> float:
 
 static func speed_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return minf(1.0 + float(c["speed_per_cycle"]) * cycle_of(arena_index) + 0.01 * arena_index, float(c["speed_cap"]))
+	return minf(1.0 + float(c["speed_per_arena"]) * arena_index, float(c["speed_cap"]))
 
 
 static func reward_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["reward_per_arena"]) * arena_index + float(c["reward_per_cycle"]) * cycle_of(arena_index)) * diff_x("reward_x")
+	return (1.0 + float(c["reward_per_arena"]) * arena_index) * diff_x("reward_x")
 
 
 ## Probabilidad de que un enemigo normal reciba una variante peligrosa (afijo).
 static func affix_chance(arena_index: int) -> float:
-	return clampf((arena_index - 4) * 0.045 + cycle_of(arena_index) * 0.08, 0.0, 0.6)
+	var c := Config.SCALING
+	return clampf((arena_index - int(c["affix_start"])) * float(c["affix_per_arena"]), 0.0, float(c["affix_cap"]))
+
+
+## Resistencia de élites y jefes (fracción de daño que ignoran).
+static func elite_resist(arena_index: int) -> float:
+	var c := Config.SCALING
+	return minf(float(c["resist_per_arena"]) * arena_index, float(c["resist_cap"]))
+
+
+## Ritmo de ataque de élites y jefes (multiplica sus tiempos de espera: <1 = atacan más a menudo).
+static func attack_pace(arena_index: int) -> float:
+	var c := Config.SCALING
+	return maxf(float(c["pace_min"]), 1.0 - float(c["pace_per_arena"]) * arena_index)
+
+
+## Número de élites en una arena de élites (crece 1 cada ~9 arenas).
+static func elite_count(arena_index: int) -> int:
+	return 1 + arena_index / 9
+
+
+## Duración de la arena de supervivencia (s).
+static func survival_time(arena_index: int) -> float:
+	return minf(40.0 + 1.0 * arena_index, 100.0)
 
 
 ## Puntos de oleada disponibles para una arena.
 static func wave_budget(arena_index: int, wave_number: int) -> float:
 	return (7.0 + 2.2 * wave_number) * count_mult(arena_index)
+
+
+## Amenaza total esperada de una arena: vida × daño × cantidad (sirve para vigilar saltos en las pruebas).
+static func threat(arena_index: int) -> float:
+	return hp_mult(arena_index) * dmg_mult(arena_index) * count_mult(arena_index)
 
 
 static func available_types(arena_index: int) -> Array:

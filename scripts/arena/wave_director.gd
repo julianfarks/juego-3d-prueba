@@ -5,15 +5,13 @@ extends RefCounted
 
 ## Devuelve {"waves": Array[Array[String]], "survival_time": float, "hazards": bool, "boss": String}
 static func plan(kind: String, index: int, rng: RandomNumberGenerator) -> Dictionary:
-	var cycle := Scaling.cycle_of(index)
 	var out := {"waves": [], "survival_time": 0.0, "hazards": false, "boss": "", "stream": false}
 	match kind:
 		Scaling.KIND_ELIMINATION:
-			var n := 3 + (1 if cycle >= 1 else 0)
-			for w in n:
+			for w in 3:
 				out["waves"].append(_compose(Scaling.wave_budget(index, w), index, rng))
 		Scaling.KIND_SURVIVAL:
-			out["survival_time"] = 40.0 + 6.0 * cycle
+			out["survival_time"] = Scaling.survival_time(index)
 			out["stream"] = true
 			out["hazards"] = index >= 3
 		Scaling.KIND_CHALLENGE:
@@ -22,7 +20,7 @@ static func plan(kind: String, index: int, rng: RandomNumberGenerator) -> Dictio
 			out["waves"].append(_compose(Scaling.wave_budget(index, 0) * 0.5, index, rng))
 			out["waves"].append(_compose(Scaling.wave_budget(index, 1) * 0.5, index, rng))
 		Scaling.KIND_ELITE:
-			var elites := 1 + (1 if index >= 8 else 0) + cycle
+			var elites := Scaling.elite_count(index)
 			var first: Array = []
 			for i in elites:
 				first.append("elite")

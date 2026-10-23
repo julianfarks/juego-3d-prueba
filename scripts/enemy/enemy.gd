@@ -629,7 +629,7 @@ func _after_act() -> void:
 	if kind == "boss":
 		rec *= 1.0 - 0.12 * (phase - 1)
 	_t = rec
-	_gate = (0.35 if not is_boss else 0.55) + randf() * 0.4
+	_gate = ((0.35 if not is_boss else 0.55) + randf() * 0.4) * (Scaling.attack_pace(arena_index) if is_elite else 1.0)
 	_set_state(S.RECOVER)
 
 
@@ -697,6 +697,8 @@ func take_damage(dmg: float, info: Dictionary = {}) -> bool:
 			fx.damage_number(global_position + Vector3(0, 2.2 * vscale, 0), "¡INMUNE!", Color(0.7, 0.7, 0.8), 0.8)
 		return false
 	dmg = maxf(0.0, dmg)
+	if is_elite:
+		dmg *= 1.0 - Scaling.elite_resist(arena_index)
 	hp -= dmg
 	_since_hit = 0.0
 	GameState.run_stats["damage_dealt"] += dmg

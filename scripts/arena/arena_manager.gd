@@ -189,8 +189,7 @@ func _fight(delta: float) -> void:
 			_spawn_t -= delta
 			if _spawn_t <= 0.0 and alive < mini(cap, 8 + index):
 				_spawn_t = Scaling.spawn_interval(index) * 0.8
-				for i in (1 + int(Scaling.cycle_of(index))):
-					_spawn_enemy(WaveDirector.stream_pick(index, rng))
+				_spawn_enemy(WaveDirector.stream_pick(index, rng))
 	else:
 		# cola de la oleada actual
 		if not _queue.is_empty():
@@ -466,7 +465,7 @@ func _update_hazards(delta: float) -> void:
 		_hazard_t -= delta
 		var pl = GameState.player
 		if _hazard_t <= 0.0 and pl != null and pl.alive and GameState.fx != null:
-			_hazard_t = maxf(2.2, 6.0 - Scaling.cycle_of(index) * 0.8 - index * 0.1)
+			_hazard_t = maxf(2.2, 6.0 - index * 0.14)
 			var tgt: Vector3 = pl.global_position + Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))
 			tgt.x = clampf(tgt.x, -half + 2.0, half - 2.0)
 			tgt.z = clampf(tgt.z, -half + 2.0, half - 2.0)

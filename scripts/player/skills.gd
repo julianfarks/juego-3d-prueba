@@ -323,7 +323,7 @@ func _cast_docs() -> bool:
 	var b: Build = GameState.build
 	cd_max[1] = float(Config.SKILLS["docs"]["cd"]) * (1.0 - cdr())
 	cd[1] = cd_max[1]
-	var count: int = int(Config.SKILLS["docs"]["count"]) + int(b.s("docs_extra"))
+	var count: int = mini(int(Config.SKILLS["docs"]["count"]) + int(b.s("docs_extra")), 36)
 	var dmg: float = float(Config.SKILLS["docs"]["dmg"])
 	var speed: float = float(Config.SKILLS["docs"]["speed"])
 	var dir := aim_dir(24.0)
