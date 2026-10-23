@@ -161,7 +161,7 @@ static func apply_effect(effect: String, v: float, ctx: Dictionary) -> void:
 				e.apply_mark(v)
 		"stun_area":
 			for e in Combat.enemies_in_radius(pos, 4.5):
-				e.take_damage(1.0, {"src": "stun", "stagger": v, "element": "phys", "knock": Vector3.ZERO})
+				e.take_damage(0.0, {"src": "stun", "silent": true, "stagger": v, "element": "phys", "knock": Vector3.ZERO})
 		"coins":
 			GameState.add_coins(maxi(1, int(round(v))), false)
 		"xp":
@@ -184,13 +184,13 @@ static func apply_effect(effect: String, v: float, ctx: Dictionary) -> void:
 				var d2: Vector3 = pos - e.global_position
 				d2.y = 0.0
 				if d2.length() > 1.5:
-					e.take_damage(1.0, {"src": "pull", "knock": d2.normalized() * v, "element": "phys"})
+					e.take_damage(0.0, {"src": "pull", "silent": true, "knock": d2.normalized() * v, "element": "phys"})
 		"push":
 			for e in Combat.enemies_in_radius(pos, 5.5):
 				var d3: Vector3 = e.global_position - pos
 				d3.y = 0.0
 				d3 = d3.normalized() if d3.length() > 0.05 else Vector3.FORWARD
-				e.take_damage(1.0, {"src": "push", "knock": d3 * v, "element": "phys"})
+				e.take_damage(0.0, {"src": "push", "silent": true, "knock": d3 * v, "element": "phys"})
 		"invuln":
 			player.iframes = maxf(player.iframes, v)
 		"reset_dodge":

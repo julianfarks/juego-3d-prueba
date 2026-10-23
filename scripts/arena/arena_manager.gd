@@ -380,7 +380,7 @@ func _kill_leftovers() -> void:
 	for e in active.duplicate():
 		if is_instance_valid(e) and e.alive:
 			e.invuln_t = 0.0
-			e.take_damage(e.hp + 1.0, {"src": "boss_death", "element": "phys", "knock": Vector3.ZERO})
+			e.take_damage(e.hp + 1.0, {"src": "boss_death", "element": "phys", "knock": Vector3.ZERO, "silent": true})
 
 
 ## Herramienta de desarrollo: mata a todos los enemigos vivos.

@@ -37,6 +37,7 @@ func defaults() -> Dictionary:
 		"settings": {
 			"music": 0.7,
 			"sfx": 0.9,
+			"combat_sfx": 0.85,    # volumen de los efectos de combate (0-1 = 0-100 %)
 			"ambient": 0.6,
 			"quality": 1,          # 0 baja, 1 media, 2 alta
 			"fps": 60,
@@ -45,6 +46,8 @@ func defaults() -> Dictionary:
 			"show_fps": false,
 			"auto_attack": true,
 			"damage_numbers": true,
+			"number_size": 1.0,    # escala de los números de daño (0.6-1.6)
+			"reduce_fx": false,    # agrupar/recortar números y efectos cuando hay muchos impactos
 			"dev_unlocked": false,
 		},
 		"controls": {

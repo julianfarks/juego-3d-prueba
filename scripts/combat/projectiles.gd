@@ -261,5 +261,4 @@ func _player_projectile_hit(p: P, e: Node3D) -> void:
 		GameState.fx.burst(p.pos, Color(1, 1, 0.9), 5, 4.0, 0.1, 0.3)
 	if GameState.build.has_synergy("perfect_storm") and p.kind == "doc":
 		o["force_crit"] = randf() < 0.25
-	AudioManager.sfx_at("hit_1", p.pos, -8.0)
 	Combat.player_hit(e, p.dmg, o)

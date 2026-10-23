@@ -324,7 +324,7 @@ func _echo(center: Vector3, radius: float, dmg: float) -> void:
 	var fx = GameState.fx
 	if fx != null:
 		fx.ring(center, radius, Color(0.6, 0.85, 1.0, 0.7), 0.4, 0.5)
-	AudioManager.sfx_at("hit_2", center, -6.0)
+	AudioManager.sfx_at("swing", center, -9.0)          # sonido de lanzamiento; los impactos suenan por enemigo golpeado
 	var list := Combat.enemies_in_radius(center, radius)
 	for e in list:
 		var away: Vector3 = e.global_position - center

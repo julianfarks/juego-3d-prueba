@@ -107,6 +107,7 @@ static func player_hit(enemy: Node3D, base: float, opts: Dictionary) -> bool:
 		"crit": crit, "src": opts.get("src", "slam"),
 		"knock": (opts.get("knock", Vector3.ZERO) as Vector3) * (1.0 + b.s("knock_pow")), "element": opts.get("element", "phys"),
 		"stagger": float(opts.get("stagger", 0.0)) + (b.s("stagger_add") if float(opts.get("stagger", 0.0)) > 0.0 else 0.0),
+		"area": int(opts.get("area_hits", 1)),
 	}
 	GameState.run_stats["highest_hit"] = maxf(float(GameState.run_stats["highest_hit"]), dmg)
 	if crit:
@@ -163,9 +164,11 @@ static func explode(pos: Vector3, radius: float, damage: float, opts: Dictionary
 		fx.ring(pos, radius, Color(1.0, 0.7, 0.2, 0.85), 0.35, 0.3)
 		fx.flash_sphere(pos + Vector3(0, 0.6, 0), radius * 0.55, Color(1.0, 0.8, 0.35, 0.7), 0.22)
 		fx.burst(pos + Vector3(0, 0.5, 0), Color(1.0, 0.75, 0.25), 8, 6.0, 0.14, 0.45)
-	AudioManager.sfx_at("explosion", pos, -4.0)
 	var exclude = opts.get("exclude", null)
 	var hits := enemies_in_radius(pos, radius)
+	# una sola explosión sonora para todos los afectados (más grave cuanto mayor el radio)
+	AudioManager.combat_sfx("explosion", pos, -4.0 if not hits.is_empty() else -9.0,
+		AudioManager.P_CRIT if hits.size() >= 3 else AudioManager.P_ELEM, clampf(1.35 - radius * 0.06, 0.75, 1.2), 0.05)
 	for e in hits:
 		if e == exclude:
 			continue
@@ -175,7 +178,7 @@ static func explode(pos: Vector3, radius: float, damage: float, opts: Dictionary
 		var o := {"src": opts.get("src", "explosion"), "no_crit": true, "flat": false, "proc": false,
 			"knock": dir * 4.0, "area_hits": hits.size(), "element": opts.get("element", "fire")}
 		var r := calc(e, damage, o)
-		var killed: bool = e.take_damage(r["damage"], {"crit": false, "src": o["src"], "knock": o["knock"], "element": o["element"]})
+		var killed: bool = e.take_damage(r["damage"], {"crit": false, "src": o["src"], "knock": o["knock"], "element": o["element"], "aoe": true, "area": hits.size()})
 		if not killed and opts.get("burn", false):
 			e.apply_burn(GameState.build.s("burn_dps") + 6.0, 3.0)
 
@@ -197,7 +200,7 @@ static func chain_lightning(from_enemy: Node3D, damage: float, jumps: int) -> vo
 		if fx != null:
 			fx.beam(a, c, Color(0.7, 0.9, 1.0, 0.95), 0.1, 0.18)
 			fx.burst(c, Color(0.8, 0.95, 1.0), 4, 4.0, 0.1, 0.3)
-		AudioManager.sfx_at("zap", c, -6.0)
+		AudioManager.combat_sfx("zap", c, -6.0, AudioManager.P_ELEM)
 		var o := {"src": "chain", "proc": false, "element": "shock", "flat": false, "no_crit": true, "knock": Vector3.ZERO}
 		var r := calc(nxt, damage, o)
 		nxt.take_damage(r["damage"], {"crit": false, "src": "chain", "element": "shock", "knock": Vector3.ZERO})

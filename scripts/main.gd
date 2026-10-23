@@ -73,6 +73,14 @@ func _ready() -> void:
 			add_child(inode)
 			inode.set("main", self)
 		return
+	if Config.cmd_flag("--fbtest"):
+		var bt := load("res://tests/fbtest.gd")
+		if bt != null:
+			var bnode: Node = bt.new()
+			bnode.name = "FeedbackTest"
+			add_child(bnode)
+			bnode.set("main", self)
+		return
 	if Config.cmd_flag("--flowtest"):
 		var ft := load("res://tests/flowtest.gd")
 		if ft != null:

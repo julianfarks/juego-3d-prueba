@@ -691,31 +691,22 @@ func take_damage(dmg: float, info: Dictionary = {}) -> bool:
 		return false
 	if state == S.SPAWN:
 		return false
-	var fx = GameState.fx
 	if invuln_t > 0.0:
-		if fx != null:
-			fx.damage_number(global_position + Vector3(0, 2.2 * vscale, 0), "¡INMUNE!", Color(0.7, 0.7, 0.8), 0.8)
+		Feedback.immune(self)
 		return false
 	dmg = maxf(0.0, dmg)
 	if is_elite:
 		dmg *= 1.0 - Scaling.elite_resist(arena_index)
+	var hp_before := hp
 	hp -= dmg
 	_since_hit = 0.0
 	GameState.run_stats["damage_dealt"] += dmg
 	var crit: bool = info.get("crit", false)
-	var element: String = info.get("element", "phys")
 	var src: String = info.get("src", "")
-	if fx != null:
-		var col: Color = Combat.COLORS.get("crit" if crit else element, Color.WHITE)
-		if src == "burn":
-			col = Combat.COLORS["fire"]
-		var sz := 1.0 + clampf(dmg / maxf(1.0, max_hp) * 3.0, 0.0, 0.7) + (0.35 if crit else 0.0)
-		if src != "burn" or randf() < 0.5:
-			fx.damage_number(global_position + Vector3(randf_range(-0.3, 0.3), 2.1 * vscale, randf_range(-0.3, 0.3)), str(int(round(dmg))) + ("!" if crit else ""), col, sz, crit)
-	if src != "burn":
+	# Número flotante + sonido: mismo evento, mismo valor (sobredaño incluido) que el daño aplicado.
+	Feedback.on_damage(self, dmg, info, hp_before, max_hp, hp <= 0.0)
+	if src != "burn" and dmg > 0.0:
 		rig.hit_flash(0.7)
-		if src != "chain":
-			AudioManager.sfx_at("crit" if crit else "hit_%d" % (randi() % 3), global_position, -7.0)
 	var kb: Vector3 = info.get("knock", Vector3.ZERO)
 	if kb.length() > 0.01:
 		_kb += kb * (1.0 - float(def.get("knock_res", 0.0))) * 1.6
@@ -787,7 +778,6 @@ func _die(info: Dictionary) -> void:
 		_bar.visible = false
 	rig.die(0.9)
 	velocity = Vector3.ZERO
-	AudioManager.sfx_at("kill", global_position, -3.0)
 	if GameState.fx != null:
 		GameState.fx.burst(global_position + Vector3(0, 1.0, 0), Color(1.0, 0.9, 0.5), 10 if not is_boss else 24, 6.0, 0.14, 0.6)
 	if is_boss:

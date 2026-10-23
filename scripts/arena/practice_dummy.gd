@@ -65,19 +65,13 @@ func hp_frac() -> float:
 
 ## Mismo contrato que Enemy.take_damage: devuelve true si "mata" (nunca).
 func take_damage(dmg: float, info: Dictionary = {}) -> bool:
-	var crit: bool = info.get("crit", false)
-	var element: String = info.get("element", "phys")
 	var src: String = info.get("src", "")
 	_last_dmg = dmg
 	_flash = 0.25
 	if src != "burn":
 		_hits.append({"t": Time.get_ticks_msec() / 1000.0, "dmg": dmg})
-		var fx = GameState.fx
-		if fx != null:
-			var col: Color = Combat.COLORS.get("crit" if crit else element, Color.WHITE)
-			var sz := 1.0 + clampf(dmg / 80.0, 0.0, 0.7) + (0.35 if crit else 0.0)
-			fx.damage_number(global_position + Vector3(randf_range(-0.3, 0.3), 2.5, randf_range(-0.3, 0.3)), str(int(round(dmg))) + ("!" if crit else ""), col, sz, crit)
-		AudioManager.sfx_at("crit" if crit else "hit_%d" % (randi() % 3), global_position, -7.0)
+	# mismo punto único de número + sonido que los enemigos (el muñeco nunca muere)
+	Feedback.on_damage(self, dmg, info, max_hp, max_hp, false)
 	var kb: Vector3 = info.get("knock", Vector3.ZERO)
 	if kb.length() > 0.01:
 		_sway_v += Vector3(kb.z, 0, -kb.x) * 0.06

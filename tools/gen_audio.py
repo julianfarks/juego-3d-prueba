@@ -441,23 +441,103 @@ def sfx_barrier():
     return hum * 0.7 + zap
 
 
+def _hit_core(f0, dur, click_hp, crunch_lp, body_k=26.0):
+    """Impacto en tres capas: cuerpo grave con caída de tono, chasquido de ataque y 'crujido'."""
+    n = int(SR * dur)
+    body = sweep(f0 * 1.7, f0 * 0.5, dur) * exp_env(n, body_k)
+    click = highpass(noise(dur), click_hp) * exp_env(n, 150) * 0.85
+    crunch = lowpass(noise(dur), crunch_lp) * exp_env(n, 40) * 0.55
+    return body + click + crunch
+
+
 def sfx_hit(var=0):
-    n = int(SR * 0.16)
-    x = lowpass(noise(0.16), 2400) * exp_env(n, 30) + sine(140 + 25 * var, 0.16) * exp_env(n, 28) * 0.9
+    f0 = [205, 165, 245, 185, 225][var % 5]
+    return _hit_core(f0, 0.17, 1700 + 280 * var, 3300 - 240 * var)
+
+
+def sfx_crit(var=0):
+    """Golpe + campanilla brillante + 'shing' ascendente: se distingue al instante."""
+    n = int(SR * 0.36)
+    x = pad_to(_hit_core(230 + 25 * var, 0.17, 2200, 3600), n) * 1.05
+    f = 1320 if var == 0 else 1480
+    for k, a in ((1.0, 0.5), (1.5, 0.32), (2.0, 0.2)):
+        x += sine(f * k, 0.36) * exp_env(n, 11 + 3 * k) * a
+    x += highpass(sweep(1800, 5200, 0.36), 1500) * exp_env(n, 14) * 0.18
     return x
 
 
-def sfx_crit():
+def sfx_hit_heavy():
+    n = int(SR * 0.32)
+    x = pad_to(_hit_core(120, 0.3, 1200, 2200, 14.0), n) * 1.1
+    x += sine(58, 0.32) * exp_env(n, 9) * 0.8
+    return x
+
+
+def sfx_hit_boss():
+    """Golpe a jefe: subgrave + metal inarmónico, más largo y pesado."""
+    n = int(SR * 0.5)
+    x = sweep(120, 38, 0.5) * exp_env(n, 6.5) * 1.1
+    x += pad_to(_hit_core(95, 0.3, 1000, 1800, 12.0), n) * 0.9
+    for f, a in ((312, 0.35), (487, 0.25), (731, 0.16)):
+        x += sine(f, 0.5) * exp_env(n, 9) * a
+    return x
+
+
+def sfx_hit_fire():
     n = int(SR * 0.3)
-    x = sfx_hit(2)
-    x = pad_to(x, n)
-    x += sine(1320, 0.3) * exp_env(n, 12) * 0.5 + sine(1980, 0.3) * exp_env(n, 14) * 0.3
+    t = ts(0.3)
+    crackle = highpass(noise(0.3), 2800) * (RNG.uniform(0, 1, n) > 0.82) * exp_env(n, 9)
+    whoosh = lowpass(noise(0.3), np.linspace(2600, 500, n)) * exp_env(n, 8) * 0.8
+    return pad_to(_hit_core(190, 0.17, 1600, 3000), n) * 0.8 + crackle * 1.2 + whoosh
+
+
+def sfx_hit_ice():
+    n = int(SR * 0.3)
+    x = pad_to(_hit_core(260, 0.15, 2600, 4200), n) * 0.7
+    for f, a in ((2400, 0.4), (3100, 0.3), (3900, 0.22)):
+        x += sine(f, 0.3) * exp_env(n, 26) * a
+    x += highpass(noise(0.3), 4000) * exp_env(n, 40) * 0.5
+    return x
+
+
+def sfx_hit_shock():
+    n = int(SR * 0.26)
+    t = ts(0.26)
+    buzz = highpass(noise(0.26), 1500) * (0.5 + 0.5 * np.sign(np.sin(2 * np.pi * 110 * t))) * exp_env(n, 14)
+    zip_ = sweep(2600, 260, 0.26) * exp_env(n, 17) * 0.45
+    return pad_to(_hit_core(210, 0.14, 2000, 3800), n) * 0.7 + buzz * 0.9 + zip_
+
+
+def sfx_dot_tick():
+    """Tic suave de efecto periódico (quemadura, zona): no compite con los golpes."""
+    n = int(SR * 0.13)
+    return highpass(noise(0.13), 2200) * exp_env(n, 38) * 0.6 + sine(320, 0.13) * exp_env(n, 40) * 0.4
+
+
+def sfx_combo():
+    """Arpegio ascendente cristalino: cadena de impactos de una sinergia."""
+    n = int(SR * 0.42)
+    x = np.zeros(n)
+    for i, note in enumerate((76, 79, 83, 88)):
+        seg = sine(hz(note), 0.3) * exp_env(int(SR * 0.3), 9) + sine(hz(note) * 2, 0.3) * exp_env(int(SR * 0.3), 14) * 0.35
+        mix_into(x, seg, i * 0.055, 0.7, wrap=False)
+    x += highpass(noise(0.42), 5000) * exp_env(n, 12) * 0.12
     return x
 
 
 def sfx_kill():
     n = int(SR * 0.3)
     x = sweep(420, 90, 0.3) * exp_env(n, 9) * 0.8 + highpass(noise(0.3), 1000) * exp_env(n, 14) * 0.5
+    return x
+
+
+def sfx_kill_boss():
+    n = int(SR * 0.9)
+    x = sweep(360, 34, 0.9) * exp_env(n, 4.5) * 0.9
+    x += lowpass(noise(0.9), np.linspace(3000, 150, n)) * exp_env(n, 4) * 1.2
+    x += sine(55, 0.9) * exp_env(n, 5) * 0.8
+    for f, a in ((523, 0.25), (784, 0.2)):
+        x += sine(f, 0.9) * exp_env(n, 6) * a
     return x
 
 
@@ -617,7 +697,10 @@ def main():
         "jump": sfx_jump(), "land": sfx_land(), "dodge": sfx_dodge(),
         "slam": sfx_slam(), "swing": sfx_swing(), "docs": sfx_docs(), "seal": sfx_seal(),
         "barrier": sfx_barrier(), "hit_0": sfx_hit(0), "hit_1": sfx_hit(1), "hit_2": sfx_hit(2),
-        "crit": sfx_crit(), "kill": sfx_kill(), "explosion": sfx_explosion(), "zap": sfx_zap(),
+        "hit_3": sfx_hit(3), "hit_4": sfx_hit(4),
+        "crit": sfx_crit(0), "crit_1": sfx_crit(1), "hit_heavy": sfx_hit_heavy(), "hit_boss": sfx_hit_boss(),
+        "hit_fire": sfx_hit_fire(), "hit_ice": sfx_hit_ice(), "hit_shock": sfx_hit_shock(),
+        "dot_tick": sfx_dot_tick(), "combo": sfx_combo(), "kill_boss": sfx_kill_boss(), "kill": sfx_kill(), "explosion": sfx_explosion(), "zap": sfx_zap(),
         "spawn": sfx_spawn(), "enemy_shoot": sfx_enemy_shoot(), "telegraph": sfx_telegraph(),
         "boss_roar": sfx_boss_roar(), "hurt": sfx_hurt(), "chest": sfx_chest(), "card": sfx_card(),
         "card_flip": sfx_card_flip(), "buy": sfx_buy(), "deny": sfx_deny(), "coin": sfx_coin(),

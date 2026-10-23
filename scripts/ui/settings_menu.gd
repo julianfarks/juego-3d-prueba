@@ -42,7 +42,8 @@ func _ready() -> void:
 	sc.add_child(_vbox)
 	_section("Audio")
 	_slider("Música", "music", 0.0, 1.0, 0.05)
-	_slider("Efectos", "sfx", 0.0, 1.0, 0.05)
+	_slider("Efectos de combate", "combat_sfx", 0.0, 1.0, 0.05)
+	_slider("Otros efectos", "sfx", 0.0, 1.0, 0.05)
 	_slider("Ambiente", "ambient", 0.0, 1.0, 0.05)
 	_section("Gráficos y rendimiento")
 	_options("Calidad", "quality", ["Baja", "Media", "Alta"])
@@ -52,6 +53,8 @@ func _ready() -> void:
 	_slider("Sensibilidad de cámara", "camera_sens", 0.3, 2.5, 0.05)
 	_toggle("Ataque automático", "auto_attack")
 	_toggle("Números de daño", "damage_numbers")
+	_slider("Tamaño de los números", "number_size", 0.6, 1.6, 0.05, true)
+	_toggle("Reducir efectos con muchos impactos", "reduce_fx")
 	_toggle("Vibración", "vibration")
 	_section("Controles táctiles")
 	var row := HBoxContainer.new()
@@ -84,7 +87,8 @@ func _section(text: String) -> void:
 	UIKit.hsep(_vbox)
 
 
-func _slider(label: String, key: String, lo: float, hi: float, step: float) -> void:
+func _slider(label: String, key: String, lo: float, hi: float, step: float, as_pct := false) -> void:
+	as_pct = as_pct or hi <= 1.0
 	var row := HBoxContainer.new()
 	_vbox.add_child(row)
 	var l := UIKit.label(label, 24)
@@ -97,11 +101,16 @@ func _slider(label: String, key: String, lo: float, hi: float, step: float) -> v
 	s.value = float(SaveSystem.setting(key))
 	s.custom_minimum_size = Vector2(400, 44)
 	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var val := UIKit.label("%d%%" % int(s.value * 100.0) if hi <= 1.0 else "%.2f" % s.value, 22, UIKit.TEXT_DIM)
+	var val := UIKit.label("%d%%" % int(round(s.value * 100.0)) if as_pct else "%.2f" % s.value, 22, UIKit.TEXT_DIM)
 	s.value_changed.connect(func(x):
 		SaveSystem.set_setting(key, x)
-		val.text = ("%d%%" % int(x * 100.0)) if hi <= 1.0 else "%.2f" % x
-		AudioManager.apply_volumes())
+		val.text = ("%d%%" % int(round(x * 100.0))) if as_pct else "%.2f" % x
+		AudioManager.apply_volumes()
+		if GameState.fx != null:
+			GameState.fx.apply_quality())
+	if key == "combat_sfx":
+		# al soltar el control suena un golpe de muestra con el volumen elegido
+		s.drag_ended.connect(func(_changed): AudioManager.combat_sfx("hit_0", Vector3.ZERO, -4.0, AudioManager.P_BOSS))
 	row.add_child(s)
 	row.add_child(val)
 
@@ -113,7 +122,10 @@ func _toggle(label: String, key: String) -> void:
 	cb.add_theme_font_size_override("font_size", 24)
 	cb.focus_mode = Control.FOCUS_NONE
 	cb.custom_minimum_size = Vector2(0, 54)
-	cb.toggled.connect(func(on): SaveSystem.set_setting(key, on))
+	cb.toggled.connect(func(on):
+		SaveSystem.set_setting(key, on)
+		if GameState.fx != null:
+			GameState.fx.apply_quality())
 	_vbox.add_child(cb)
 
 

@@ -45,6 +45,8 @@ func apply_quality() -> void:
 	max_fx = int(q["max_fx"])
 	particle_scale = float(q["fx_particles"])
 	numbers_enabled = bool(SaveSystem.setting("damage_numbers"))
+	number_size = clampf(float(SaveSystem.setting("number_size")), 0.5, 1.8)
+	reduce_fx = bool(SaveSystem.setting("reduce_fx"))
 
 
 # --- mallas compartidas -------------------------------------------------------
@@ -378,62 +380,213 @@ func zone(pos: Vector3, radius: float, dur: float, color := Color(0.5, 0.3, 1.0)
 
 
 # --- números de daño ----------------------------------------------------------
-var _labels: Array = []   # [{node, t, dur, vel, start}]
+## Pool de Label3D reutilizados (cero asignaciones durante el combate), con prioridad,
+## agrupación por enemigo, separación lateral y tamaños acotados.
+const NUM_FONT := 44
+const NUM_PIXEL := 0.0105          # metros por píxel de fuente: tamaño base legible en pantallas de móvil
+const NUM_MIN_SCALE := 0.5          # tamaño mínimo/máximo legible (antes del ajuste de usuario)
+const NUM_MAX_SCALE := 3.0
+const SPREAD_X := [0.0, 0.55, -0.55, 0.28, -0.28, 0.8, -0.8]
+
+var _labels: Array = []   # activos: {node, key, t, dur, rise, base, color, prio, kind, value, y0, x0, dx, pop, shake, mergeable}
 var _label_pool: Array[Label3D] = []
+var _clock := 0.0
+var _spawn_times: Array[float] = []      # instantes de las últimas peticiones (presión)
+var _recent_by_key: Dictionary = {}      # enemigo -> [instante, contador] (separación)
+var reduce_fx := false
+var number_size := 1.0
+var num_stats := {"new": 0, "merged": 0, "dropped": 0, "evicted": 0, "max_live": 0}
 
 
-func damage_number(pos: Vector3, text: String, color := Color.WHITE, size := 1.0, crit := false) -> void:
-	if not numbers_enabled:
-		return
-	if _labels.size() >= int(max_fx * 0.6):
-		return
-	var lbl: Label3D = null
+func number_cap() -> int:
+	var cap := clampi(int(max_fx * 0.6), 12, 40)
+	return maxi(8, int(cap * 0.5)) if reduce_fx else cap
+
+
+## Presión: peticiones de número en los últimos 0.5 s.
+func number_pressure() -> int:
+	while not _spawn_times.is_empty() and _clock - _spawn_times[0] > 0.5:
+		_spawn_times.pop_front()
+	return _spawn_times.size()
+
+
+func _acquire_label() -> Label3D:
 	for l in _label_pool:
 		if not l.visible:
-			lbl = l
-			break
-	if lbl == null:
-		lbl = Label3D.new()
-		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.no_depth_test = true
-		lbl.fixed_size = false
-		lbl.font_size = 44
-		lbl.outline_size = 10
-		lbl.pixel_size = 0.0085
-		lbl.shaded = false
-		lbl.double_sided = true
-		add_child(lbl)
-		_label_pool.append(lbl)
+			return l
+	var lbl := Label3D.new()
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.fixed_size = false
+	lbl.font_size = NUM_FONT
+	lbl.outline_size = 9
+	lbl.pixel_size = NUM_PIXEL
+	lbl.shaded = false
+	lbl.double_sided = true
+	lbl.visible = false
+	add_child(lbl)
+	_label_pool.append(lbl)
+	return lbl
+
+
+## Compatibilidad: aviso de texto simple (sin agrupación).
+func damage_number(pos: Vector3, text: String, color := Color.WHITE, size := 1.0, crit := false) -> void:
+	spawn_number(pos, 0, {"kind": "info", "text": text, "color": color, "scale": size * (1.5 if crit else 1.0),
+		"dur": 0.85 if crit else 0.65, "rise": 1.4, "prio": 3 if crit else 1, "massive": false, "crit": crit, "value": 0.0})
+
+
+## Muestra (o agrupa) un número de daño. Devuelve "new", "merged", "dropped" u "off".
+## style: ver Feedback.classify(). key identifica al enemigo (para agrupar y separar).
+func spawn_number(pos: Vector3, key: int, style: Dictionary) -> String:
+	if not numbers_enabled:
+		return "off"
+	var kind: String = style["kind"]
+	var prio: int = style["prio"]
+	var value: float = style["value"]
+	_spawn_times.append(_clock)
+	var pressure := number_pressure()
+	var live := _labels.size()
+	var cap := number_cap()
+	# --- agrupación: los periódicos siempre; los golpes normales cuando hay mucha presión ---
+	var hot := live >= int(cap * (0.3 if reduce_fx else 0.55)) or pressure >= (8 if reduce_fx else 14)
+	var can_merge: bool = (kind == "dot") or (hot and (kind == "normal" or kind == "elem" or kind == "chain" or kind == "aoe"))
+	if can_merge and key != 0:
+		var window: float = 0.9 if kind == "dot" else (0.45 if reduce_fx else 0.3)
+		for d in _labels:
+			if d["key"] == key and d["mergeable"] and d["prio"] <= prio and _clock - float(d["born"]) < window \
+					and (d["kind"] == kind or kind != "dot" and d["kind"] != "dot"):
+				d["value"] = float(d["value"]) + value
+				var nlbl: Label3D = d["node"]
+				var txt := Feedback.fmt(float(d["value"]))
+				nlbl.text = txt
+				d["t"] = minf(float(d["t"]), 0.12)         # reaviva el número y repite el golpe visual
+				d["born"] = _clock
+				d["pop"] = maxf(float(d["pop"]), 0.25)
+				num_stats["merged"] += 1
+				return "merged"
+	# --- tope de números vivos: se expulsa el de menor prioridad o se descarta el nuevo ---
+	if live >= cap:
+		var worst := -1
+		for i in live:
+			var d2: Dictionary = _labels[i]
+			if worst == -1 or d2["prio"] < _labels[worst]["prio"] \
+					or (d2["prio"] == _labels[worst]["prio"] and float(d2["t"]) / float(d2["dur"]) > float(_labels[worst]["t"]) / float(_labels[worst]["dur"])):
+				worst = i
+		if worst == -1 or int(_labels[worst]["prio"]) >= prio:
+			# no cabe: si hay un número del mismo enemigo, se suma a él para no perder información
+			if key != 0 and kind != "info" and kind != "crit":
+				for d3 in _labels:
+					if d3["key"] == key and d3["mergeable"] and d3["prio"] <= prio:
+						d3["value"] = float(d3["value"]) + value
+						(d3["node"] as Label3D).text = Feedback.fmt(float(d3["value"]))
+						num_stats["merged"] += 1
+						return "merged"
+			num_stats["dropped"] += 1
+			return "dropped"
+		var gone: Dictionary = _labels[worst]
+		(gone["node"] as Label3D).visible = false
+		_labels.remove_at(worst)
+		num_stats["evicted"] += 1
+	var lbl := _acquire_label()
+	# --- tamaño final acotado ---
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	var comp := 1.0
+	var right := Vector3.RIGHT
+	if cam != null:
+		comp = clampf(cam.global_position.distance_to(pos) / 12.0, 0.85, 1.5)
+		right = cam.global_transform.basis.x
+	var base := clampf(float(style["scale"]) * number_size * comp, NUM_MIN_SCALE * number_size, NUM_MAX_SCALE * number_size)
+	# --- separación: cada impacto reciente sobre el mismo enemigo se desplaza a un lado y hacia arriba ---
+	var n := 0
+	if key != 0:
+		var rec: Array = _recent_by_key.get(key, [-10.0, 0])
+		n = int(rec[1]) + 1 if _clock - float(rec[0]) < 0.45 else 0
+		_recent_by_key[key] = [_clock, n]
+		if _recent_by_key.size() > 96:
+			_recent_by_key.clear()
+	var sx: float = SPREAD_X[n % SPREAD_X.size()] * base + randf_range(-0.08, 0.08)
+	var sy: float = float(floori(float(n) / float(SPREAD_X.size())) % 3) * 0.3 * base + float(n % 2) * 0.12
 	lbl.visible = true
-	lbl.text = text
-	lbl.modulate = color
-	lbl.outline_modulate = Color(0.05, 0.03, 0.08, 0.95)
-	lbl.global_position = pos + Vector3(randf_range(-0.3, 0.3), 0.0, randf_range(-0.3, 0.3))
-	lbl.scale = Vector3.ONE * size * (1.5 if crit else 1.0)
-	_labels.append({"node": lbl, "t": 0.0, "dur": 0.85 if crit else 0.65, "base": lbl.scale.x, "color": color})
+	lbl.text = style["text"]
+	var col: Color = style["color"]
+	lbl.modulate = col
+	var heavy: bool = style["massive"] or kind == "crit" or kind == "exec"
+	lbl.outline_size = 12 if heavy else (7 if kind == "dot" else 9)
+	lbl.outline_modulate = Color(0.35, 0.05, 0.1, 0.95) if style["massive"] else Color(0.05, 0.03, 0.08, 0.95)
+	lbl.render_priority = clampi(prio * 3, 0, 100)
+	lbl.outline_render_priority = lbl.render_priority - 1
+	var start := pos + right * sx + Vector3(0, sy, 0)
+	lbl.global_position = start
+	lbl.scale = Vector3.ONE * base * 0.5
+	var dur: float = float(style["dur"]) * (0.8 if reduce_fx else 1.0)
+	_labels.append({"node": lbl, "key": key, "t": 0.0, "dur": maxf(dur, 0.3), "rise": style["rise"], "base": base,
+		"color": col, "prio": prio, "kind": kind, "value": value, "x0": start.x, "y0": start.y, "z0": start.z,
+		"dx": right * (randf_range(-0.25, 0.25) + (0.5 if kind == "crit" else 0.0) * (1.0 if n % 2 == 0 else -1.0)),
+		"pop": 0.55 if (kind == "crit" or style["massive"]) else 0.3,
+		"shake": 0.07 if heavy else 0.0, "mergeable": kind != "info" and kind != "crit" and kind != "exec",
+		"born": _clock, "start": start, "alpha": 1.0})
+	num_stats["new"] += 1
+	num_stats["max_live"] = maxi(int(num_stats["max_live"]), _labels.size())
+	return "new"
 
 
 func _update_labels(delta: float) -> void:
+	_clock += delta
 	var i := _labels.size() - 1
 	while i >= 0:
 		var d: Dictionary = _labels[i]
 		d["t"] += delta
-		var k: float = clampf(d["t"] / d["dur"], 0.0, 1.0)
+		var t: float = d["t"]
+		var k: float = clampf(t / float(d["dur"]), 0.0, 1.0)
 		var lbl: Label3D = d["node"]
-		lbl.global_position += Vector3(0, delta * (2.4 - 1.8 * k), 0)
-		var pop := 1.0 + 0.35 * maxf(0.0, 1.0 - k * 6.0)
-		lbl.scale = Vector3.ONE * float(d["base"]) * pop
-		var c: Color = d["color"]
-		lbl.modulate = Color(c.r, c.g, c.b, 1.0 - maxf(0.0, (k - 0.55) / 0.45))
+		# subida con frenado (ease-out cúbico) + deriva lateral
+		var e := 1.0 - pow(1.0 - k, 3.0)
+		var st: Vector3 = d["start"]
+		var dx: Vector3 = d["dx"]
+		var p := st + Vector3(0, float(d["rise"]) * e, 0) + dx * e
+		if float(d["shake"]) > 0.0 and k < 0.35:
+			p += Vector3(sin(t * 70.0), 0.0, cos(t * 53.0)) * float(d["shake"]) * (1.0 - k / 0.35)
+		lbl.global_position = p
+		# aparición con "pop": 0.5 → 1+amp → 1 en ~0.16 s
+		var base: float = d["base"]
+		var sc: float
+		if t < 0.06:
+			sc = lerpf(0.5, 1.0 + float(d["pop"]), t / 0.06)
+		elif t < 0.18:
+			sc = lerpf(1.0 + float(d["pop"]), 1.0, (t - 0.06) / 0.12)
+		else:
+			sc = 1.0 - 0.12 * k
+		lbl.scale = Vector3.ONE * base * sc
+		# Cambiar modulate obliga a Label3D a regenerar su malla: solo se toca al desvanecer y por pasos de ~8 %.
+		var a := 1.0 - maxf(0.0, (k - 0.6) / 0.4)
+		if absf(a - float(d["alpha"])) >= 0.08 or (a <= 0.0 and float(d["alpha"]) > 0.0):
+			d["alpha"] = a
+			var c: Color = d["color"]
+			lbl.modulate = Color(c.r, c.g, c.b, a)
+			var oc := lbl.outline_modulate
+			lbl.outline_modulate = Color(oc.r, oc.g, oc.b, 0.95 * a)
 		if k >= 1.0:
 			lbl.visible = false
 			_labels.remove_at(i)
 		i -= 1
 
 
+## Con "reducir efectos" activo y muchos impactos seguidos, las partículas se reducen a la mitad.
+func _fx_relief() -> float:
+	return 0.5 if (reduce_fx and number_pressure() >= 8) else 1.0
+
+
+func live_number_count() -> int:
+	return _labels.size()
+
+
+func reset_number_stats() -> void:
+	num_stats = {"new": 0, "merged": 0, "dropped": 0, "evicted": 0, "max_live": 0}
+
+
 # --- partículas ---------------------------------------------------------------
 func burst(pos: Vector3, color: Color, amount := 10, speed := 5.0, size := 0.12, life := 0.5) -> void:
-	var n := int(round(amount * particle_scale))
+	var n := int(round(amount * particle_scale * _fx_relief()))
 	if n <= 0:
 		return
 	var p := _particles()
