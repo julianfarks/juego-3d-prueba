@@ -4,8 +4,8 @@ extends RefCounted
 ## Cada personaje = esqueleto articulado (Rig) + una malla por articulación con color por vértice.
 
 # Paleta del juego
-const NAVY := Color(0.10, 0.14, 0.32)
-const NAVY_L := Color(0.17, 0.23, 0.45)
+const NAVY := Color(0.20, 0.30, 0.64)    # traje: azul real (antes muy oscuro en movil)
+const NAVY_L := Color(0.32, 0.44, 0.82)
 const WHITE := Color(0.95, 0.95, 0.93)
 const RED := Color(0.86, 0.12, 0.16)
 const SKIN := Color(0.96, 0.75, 0.6)
@@ -113,6 +113,9 @@ static func _std_arms(parts: Dictionary, up: float, lo: float, r: float, sleeve:
 # =============================================================================
 static func build_lawyer() -> Rig:
 	var rig := make_skeleton({"leg": 0.86, "torso": 0.64, "arm_up": 0.3, "arm_lo": 0.3, "sw": 0.35, "hw": 0.125})
+	# Luz de contorno mas fuerte para que el jugador destaque sobre el escenario.
+	rig.material.set_shader_parameter("rim_amount", 0.6)
+	rig.material.set_shader_parameter("rim_power", 2.0)
 	var p := _new_parts()
 	# --- pelvis y torso (traje) ---
 	(p["hips"] as MeshBuilder).box(Vector3(0.5, 0.2, 0.3), _x(Vector3(0, 0.03, 0)), NAVY)

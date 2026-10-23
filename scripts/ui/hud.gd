@@ -96,13 +96,22 @@ func _build() -> void:
 	_combo_label = UIKit.label("", 22, Color(1.0, 0.6, 0.3))
 	tl.add_child(_combo_label)
 	# --- objetivo (arriba-centro) ---
+	# Panel oscuro detras del objetivo: se leia mal sobre fondos brillantes.
+	var top_bg := PanelContainer.new()
+	top_bg.add_theme_stylebox_override("panel", UIKit.style(Color(0.03, 0.04, 0.08, 0.62), Color(1, 1, 1, 0.08), 14, 1, 8))
+	top_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(top_bg)
+	UIKit.place(top_bg, 0.5, 0.0, -300, 8, 600, 0)
+	top_bg.grow_vertical = Control.GROW_DIRECTION_END
 	var top := VBoxContainer.new()
-	add_child(top)
-	UIKit.place(top, 0.5, 0.0, -300, 10, 600, 120)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bg.add_child(top)
 	_arena_label = UIKit.label("Arena 1", 22, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	top.add_child(_arena_label)
 	_obj_label = UIKit.label("", 24, UIKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 	top.add_child(_obj_label)
+	for l: Label in [_arena_label, _obj_label]:
+		l.add_theme_constant_override("outline_size", 5)
 	_obj_bar = _bar(Color(0.4, 0.9, 0.55), Vector2(420, 10))
 	_obj_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	top.add_child(_obj_bar)
