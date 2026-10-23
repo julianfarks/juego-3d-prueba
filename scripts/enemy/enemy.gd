@@ -1,0 +1,900 @@
+class_name Enemy
+extends CharacterBody3D
+## Enemigo genérico dirigido por datos (EnemyDefs). Una única clase cubre ladrones, corredores,
+## tanques, a distancia, invocadores, élites, minijefes y jefe de zona.
+##
+## Máquina de estados: SPAWN → PATROL → CHASE → TELE (telegrafía) → ACT (golpe) → RECOVER
+##   con interrupciones HURT / FROZEN / PHASE y final DEAD.
+## Todos los ataques se telegrafían en el suelo y son esquivables (el jugador tiene i-frames al esquivar).
+## El Arena instancia/recicla enemigos (pooling) llamando a setup().
+
+signal died(enemy: Enemy)
+signal despawned(enemy: Enemy)
+signal request_spawn(kind: String, pos: Vector3)
+
+enum S { SPAWN, PATROL, CHASE, TELE, ACT, RECOVER, HURT, FROZEN, PHASE, DEAD }
+
+const GRAVITY := 28.0
+const ACCEL := 22.0
+
+var kind := "thief"
+var def: Dictionary = {}
+var alive := false
+var state := S.SPAWN
+var arena_index := 0
+var affix := ""
+var is_elite := false
+var is_boss := false
+var body_radius := 0.45
+var vscale := 1.0
+var max_hp := 50.0
+var hp := 50.0
+var dmg_base := 8.0
+var move_speed := 4.0
+var xp_value := 5.0
+var coin_value := 1
+var display_name := ""
+var rig: Rig
+var variant := 0
+
+# estados alterados
+var marked_t := 0.0
+var slow_t := 0.0
+var slow_amt := 0.4
+var burn_t := 0.0
+var burn_dps := 0.0
+var freeze_t := 0.0
+var _burn_tick := 0.0
+
+var aggro_range := 24.0
+var home := Vector3.ZERO
+var phase := 1
+var invuln_t := 0.0
+
+var _t := 0.0                      # temporizador del estado actual
+var _kb := Vector3.ZERO            # empuje por golpes
+var _patrol_target := Vector3.ZERO
+var _patrol_wait := 0.0
+var _cds: Dictionary = {}          # nombre de ataque -> enfriamiento restante
+var _gate := 0.0                   # pausa global entre ataques
+var _atk_name := ""
+var _atk: Dictionary = {}
+var _aim_yaw := 0.0
+var _aim_dir := Vector3.FORWARD
+var _tele_items: Array = []
+var _barrage_pts: Array = []
+var _dash_left := 0.0
+var _dash_hit := false
+var _since_hit := 99.0
+var _seed := 0.0
+var _sep := Vector3.ZERO
+var _sep_frame := 0
+var _boom_t := -1.0
+var _dead_t := 0.0
+var _vis_key := ""
+var _spawn_scale_t := 0.0
+var _col: CollisionShape3D
+var _bar: Node3D
+var _bar_fill: MeshInstance3D
+var _bar_mesh: QuadMesh
+var _strafe_dir := 1.0
+
+static var _bar_back_mat: StandardMaterial3D
+static var _bar_front_mat: StandardMaterial3D
+
+
+func _ready() -> void:
+	collision_layer = Config.L_ENEMY
+	collision_mask = Config.L_WORLD
+	floor_snap_length = 0.4
+	motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
+	_seed = randf() * 10.0
+
+
+## Prepara (o recicla) el enemigo. 'v' es el variante visual solo si aún no hay modelo.
+func setup(p_kind: String, p_arena_index: int, p_affix: String, pos: Vector3, p_aggro := 999.0) -> void:
+	var first := rig == null
+	if first or kind != p_kind:
+		if rig != null:
+			rig.queue_free()
+			rig = null
+		kind = p_kind
+		def = EnemyDefs.DEFS[kind]
+		variant = randi() % maxi(1, int(def.get("variants", 1)))
+		rig = ModelFactory.build_enemy(kind, variant)
+		add_child(rig)
+		vscale = float(EnemyDefs.VISUAL_SCALE.get(kind, 1.0))
+		rig.scale = Vector3.ONE * vscale
+		rig.heavy = kind in ["tank", "elite", "miniboss", "boss"]
+		_build_collider()
+		_build_bar()
+	kind = p_kind
+	def = EnemyDefs.DEFS[kind]
+	arena_index = p_arena_index
+	affix = p_affix
+	is_boss = kind == "miniboss" or kind == "boss"
+	is_elite = kind == "elite" or is_boss
+	body_radius = float(def["radius"])
+	display_name = String(def["name"])
+	var hpm := Scaling.hp_mult(arena_index)
+	var spm := Scaling.speed_mult(arena_index)
+	max_hp = float(def["hp"]) * hpm
+	move_speed = float(def["speed"]) * spm
+	dmg_base = float(def["dmg"]) * Scaling.dmg_mult(arena_index)
+	xp_value = float(def["xp"]) * (1.0 + 0.06 * arena_index)
+	coin_value = int(round(float(def["coins"]) * Scaling.reward_mult(arena_index)))
+	var tint := Color(1, 1, 1)
+	if affix != "" and EnemyDefs.AFFIXES.has(affix):
+		var a: Dictionary = EnemyDefs.AFFIXES[affix]
+		max_hp *= float(a["hp"])
+		move_speed *= float(a["speed"])
+		tint = a["tint"]
+		display_name = "%s %s" % [a["name"], display_name]
+		xp_value *= 1.5
+		coin_value = int(ceil(coin_value * 1.5))
+	hp = max_hp
+	marked_t = 0.0
+	slow_t = 0.0
+	burn_t = 0.0
+	freeze_t = 0.0
+	invuln_t = 0.0
+	phase = 1
+	_cds.clear()
+	_gate = randf_range(0.4, 1.2)
+	_kb = Vector3.ZERO
+	_boom_t = -1.0
+	_dead_t = 0.0
+	_clear_tele()
+	_vis_key = ""
+	home = pos
+	aggro_range = p_aggro
+	global_position = pos
+	velocity = Vector3.ZERO
+	rotation = Vector3.ZERO
+	rotation.y = randf() * TAU
+	aggro_range = p_aggro
+	alive = true
+	visible = true
+	rig.revive()
+	rig.scale = Vector3.ZERO
+	_spawn_scale_t = 0.0
+	_apply_visual(tint)
+	_set_state(S.SPAWN)
+	_t = 0.7 if not is_boss else 1.2
+	_col.disabled = false
+	set_physics_process(true)
+	set_process(true)
+	if _bar != null:
+		_bar.visible = false
+	if GameState.fx != null:
+		GameState.fx.ring(pos, 1.6 * vscale, Color(0.9, 0.3, 1.0, 0.8), 0.6, 0.2)
+	AudioManager.sfx_at("spawn", pos, -8.0)
+	if is_boss:
+		GameState.boss_bar.emit(true, display_name, hp, max_hp)
+
+
+func _build_collider() -> void:
+	if _col != null:
+		_col.queue_free()
+	_col = CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	var r := float(def["radius"])
+	cap.radius = r
+	cap.height = maxf(r * 2.0 + 0.1, 1.8 * vscale)
+	_col.shape = cap
+	_col.position.y = cap.height * 0.5
+	add_child(_col)
+
+
+func _build_bar() -> void:
+	if _bar != null:
+		_bar.queue_free()
+	if _bar_back_mat == null:
+		_bar_back_mat = StandardMaterial3D.new()
+		_bar_back_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_bar_back_mat.albedo_color = Color(0.05, 0.05, 0.08, 0.85)
+		_bar_back_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_bar_back_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_bar_back_mat.billboard_keep_scale = true
+		_bar_back_mat.no_depth_test = true
+		_bar_back_mat.render_priority = 10
+		_bar_front_mat = _bar_back_mat.duplicate()
+		_bar_front_mat.albedo_color = Color(0.95, 0.25, 0.3, 1.0)
+		_bar_front_mat.render_priority = 11
+	_bar = Node3D.new()
+	_bar.position.y = 2.0 * vscale + 0.35
+	add_child(_bar)
+	var w := 1.1 + 0.25 * vscale
+	var back := MeshInstance3D.new()
+	var bm := QuadMesh.new()
+	bm.size = Vector2(1.0, 0.16)
+	back.mesh = bm
+	back.scale = Vector3(w + 0.06, 1.0, 1.0)
+	back.material_override = _bar_back_mat
+	back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_bar.add_child(back)
+	_bar_fill = MeshInstance3D.new()
+	_bar_mesh = QuadMesh.new()
+	_bar_mesh.size = Vector2(1.0, 0.11)
+	_bar_fill.mesh = _bar_mesh
+	_bar_fill.scale = Vector3(w, 1.0, 1.0)
+	_bar_fill.material_override = _bar_front_mat
+	_bar_fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_bar.add_child(_bar_fill)
+	_bar.set_meta("w", w)
+	_bar.visible = false
+
+
+func _update_bar() -> void:
+	if _bar == null or is_boss:
+		return
+	var f := clampf(hp / max_hp, 0.001, 1.0)
+	_bar.visible = hp < max_hp - 0.01 and alive
+	var w: float = _bar.get_meta("w")
+	_bar_fill.scale.x = w * f
+	_bar_mesh.center_offset = Vector3(0.5 - 0.5 / f, 0, 0)
+
+
+func hp_frac() -> float:
+	return clampf(hp / max_hp, 0.0, 1.0)
+
+
+func _player() -> Player:
+	var p = GameState.player
+	if p != null and is_instance_valid(p) and p.alive:
+		return p
+	return null
+
+
+func _set_state(s: S) -> void:
+	state = s
+
+
+# ------------------------------------------------------------------ física / IA
+func _physics_process(delta: float) -> void:
+	if state == S.DEAD:
+		_dead_tick(delta)
+		return
+	_since_hit += delta
+	_tick_status(delta)
+	if alive and global_position.y < -15.0:
+		global_position = home + Vector3(0, 1.0, 0)
+		velocity = Vector3.ZERO
+	for k in _cds.keys():
+		_cds[k] = maxf(0.0, float(_cds[k]) - delta)
+	_gate = maxf(0.0, _gate - delta)
+	invuln_t = maxf(0.0, invuln_t - delta)
+	var p := _player()
+	match state:
+		S.SPAWN:
+			_t -= delta
+			_spawn_scale_t += delta
+			var k := clampf(_spawn_scale_t / (0.6 if not is_boss else 1.1), 0.0, 1.0)
+			rig.scale = Vector3.ONE * vscale * (1.0 - pow(1.0 - k, 3.0))
+			_move_toward_dir(Vector3.ZERO, 0.0, delta)
+			if _t <= 0.0:
+				rig.scale = Vector3.ONE * vscale
+				_set_state(S.CHASE if aggro_range >= 900.0 else S.PATROL)
+		S.PATROL:
+			_patrol(delta, p)
+		S.CHASE:
+			_chase(delta, p)
+		S.TELE:
+			_tele_tick(delta, p)
+		S.ACT:
+			_act_tick(delta, p)
+		S.RECOVER:
+			_t -= delta
+			_move_toward_dir(Vector3.ZERO, 0.0, delta)
+			if _t <= 0.0:
+				_set_state(S.CHASE)
+		S.HURT:
+			_t -= delta
+			_move_toward_dir(Vector3.ZERO, 0.0, delta)
+			if _t <= 0.0:
+				_set_state(S.CHASE)
+		S.FROZEN:
+			freeze_t -= delta
+			_move_toward_dir(Vector3.ZERO, 0.0, delta)
+			if freeze_t <= 0.0:
+				_set_state(S.CHASE)
+		S.PHASE:
+			_t -= delta
+			_move_toward_dir(Vector3.ZERO, 0.0, delta)
+			if _t <= 0.0:
+				_set_state(S.CHASE)
+	if rig != null:
+		var hs := Vector2(velocity.x, velocity.z).length()
+		rig.speed_norm = clampf(hs / maxf(1.0, move_speed * 1.15), 0.0, 1.0) if state in [S.CHASE, S.PATROL] else 0.0
+	_update_visual_status()
+
+
+func _speed_now() -> float:
+	var s := move_speed
+	if slow_t > 0.0:
+		s *= (1.0 - slow_amt)
+	return s
+
+
+func _move_toward_dir(dir: Vector3, speed: float, delta: float) -> void:
+	var want := dir * speed
+	want += _kb
+	var hv := Vector3(velocity.x, 0, velocity.z)
+	hv = hv.move_toward(want, ACCEL * delta * (1.0 + (speed / 6.0)))
+	velocity.x = hv.x
+	velocity.z = hv.z
+	if is_on_floor():
+		velocity.y = -1.0
+	else:
+		velocity.y -= GRAVITY * delta
+	_kb = _kb.move_toward(Vector3.ZERO, 14.0 * delta)
+	move_and_slide()
+
+
+func _face(dir: Vector3, rate := 10.0, delta := 0.016) -> void:
+	if dir.length() < 0.01:
+		return
+	var yaw := atan2(-dir.x, -dir.z)
+	rotation.y = lerp_angle(rotation.y, yaw, clampf(rate * delta, 0.0, 1.0))
+
+
+func _flat_to(p: Player) -> Vector3:
+	var d: Vector3 = p.global_position - global_position
+	d.y = 0.0
+	return d
+
+
+func _separation() -> Vector3:
+	_sep_frame += 1
+	if _sep_frame % 4 != int(_seed) % 4:
+		return _sep
+	var out := Vector3.ZERO
+	for e in Combat.arena_enemies():
+		if e == self or not is_instance_valid(e) or not e.alive:
+			continue
+		var d: Vector3 = global_position - e.global_position
+		d.y = 0.0
+		var rr: float = body_radius + e.body_radius + 0.25
+		var l := d.length()
+		if l < rr and l > 0.001:
+			out += d / l * (rr - l) / rr
+	_sep = out * 1.6
+	return _sep
+
+
+func _patrol(delta: float, p: Player) -> void:
+	if p != null and _flat_to(p).length() < aggro_range:
+		_set_state(S.CHASE)
+		return
+	_patrol_wait -= delta
+	var to := _patrol_target - global_position
+	to.y = 0.0
+	if _patrol_wait <= 0.0 or to.length() < 0.6:
+		_patrol_wait = randf_range(2.0, 4.0)
+		var a := randf() * TAU
+		_patrol_target = home + Vector3(cos(a), 0, sin(a)) * randf_range(2.0, 6.0)
+		to = _patrol_target - global_position
+		to.y = 0.0
+	var dir := to.normalized() if to.length() > 0.6 else Vector3.ZERO
+	_face(dir, 6.0, delta)
+	_move_toward_dir(dir, _speed_now() * 0.45, delta)
+
+
+func _chase(delta: float, p: Player) -> void:
+	if p == null:
+		_move_toward_dir(Vector3.ZERO, 0.0, delta)
+		return
+	var to := _flat_to(p)
+	var dist := to.length()
+	var dir := to.normalized() if dist > 0.01 else Vector3.FORWARD
+	_face(dir, 9.0, delta)
+	# ¿atacar?
+	if _gate <= 0.0:
+		var name := _pick_attack(dist)
+		if name != "":
+			_begin_attack(name, p)
+			return
+	var behavior := String(def["behavior"])
+	var move := Vector3.ZERO
+	var spd := _speed_now()
+	match behavior:
+		"flank":
+			var k := clampf((dist - 3.0) / 7.0, 0.0, 1.0)
+			var off := sin(Time.get_ticks_msec() * 0.0025 + _seed) * 0.95 * k
+			move = dir.rotated(Vector3.UP, off)
+			if dist < 1.4:
+				move = Vector3.ZERO
+		"ranged":
+			var band: Array = def.get("band", [8.0, 13.0])
+			if dist < float(band[0]):
+				move = -dir.rotated(Vector3.UP, 0.4 * _strafe_dir)
+				spd *= 0.9
+			elif dist > float(band[1]):
+				move = dir
+			else:
+				move = dir.rotated(Vector3.UP, PI * 0.5 * _strafe_dir) * 0.55
+				if randf() < 0.004:
+					_strafe_dir = -_strafe_dir
+		"boss":
+			if dist > 7.5:
+				move = dir
+			else:
+				move = dir.rotated(Vector3.UP, PI * 0.5 * _strafe_dir) * 0.6
+				if randf() < 0.006:
+					_strafe_dir = -_strafe_dir
+		_:
+			var stop := 1.5 * maxf(1.0, vscale * 0.9)
+			move = dir if dist > stop else Vector3.ZERO
+			if is_boss and dist < 5.0 and dist > stop:
+				move = dir.rotated(Vector3.UP, 0.5 * _strafe_dir)
+	move += _separation() * 0.8
+	if move.length() > 1.0:
+		move = move.normalized()
+	# esquivar paredes: si estamos bloqueados contra una pared, deslizar por la normal
+	if is_on_wall():
+		var n := get_wall_normal()
+		n.y = 0.0
+		if n.length() > 0.01:
+			var slide := move.slide(n.normalized())
+			move = slide if slide.length() > 0.1 else n.normalized().rotated(Vector3.UP, PI * 0.5 * _strafe_dir)
+	_move_toward_dir(move, spd, delta)
+
+
+# ------------------------------------------------------------------ ataques
+func _attack_list() -> Array:
+	if kind == "boss":
+		return EnemyDefs.BOSS_PHASES[phase]
+	return def["attacks"]
+
+
+func _pick_attack(dist: float) -> String:
+	var opts: Array = []
+	for n in _attack_list():
+		if float(_cds.get(n, 0.0)) > 0.0:
+			continue
+		var a: Dictionary = EnemyDefs.ATTACKS[n]
+		if dist <= float(a["range"]) and dist >= float(a["min_range"]):
+			opts.append(n)
+	if opts.is_empty():
+		return ""
+	# prioriza los ataques de mayor alcance mínimo (cargas) y reparte el resto al azar
+	return opts[randi() % opts.size()]
+
+
+func _begin_attack(name: String, p: Player) -> void:
+	_atk_name = name
+	_atk = EnemyDefs.ATTACKS[name]
+	var to := _flat_to(p)
+	_aim_dir = to.normalized() if to.length() > 0.01 else -global_transform.basis.z
+	_aim_yaw = atan2(-_aim_dir.x, -_aim_dir.z)
+	rotation.y = _aim_yaw
+	var tele := float(_atk["tele"])
+	if phase >= 3:
+		tele *= 0.85
+	_t = tele
+	_dash_hit = false
+	_dash_left = 0.0
+	_set_state(S.TELE)
+	var fx = GameState.fx
+	if fx != null:
+		var col := Color(1.0, 0.15, 0.1)
+		if affix == "explosivo":
+			col = Color(1.0, 0.45, 0.1)
+		var pos := global_position
+		match String(_atk["shape"]):
+			"cone":
+				_tele_items.append(fx.telegraph_cone(pos, _aim_yaw, float(_atk["radius"]), float(_atk["angle"]), tele, col))
+			"circle":
+				_tele_items.append(fx.telegraph_circle(pos, float(_atk["radius"]), tele, col))
+			"line":
+				_tele_items.append(fx.telegraph_line(pos, _aim_yaw, float(_atk["length"]), float(_atk["width"]), tele, col))
+			"aim":
+				if int(_atk.get("count", 1)) > 1:
+					_tele_items.append(fx.telegraph_cone(pos, _aim_yaw, 14.0, float(_atk["spread"]) + 10.0, tele, col))
+				else:
+					_tele_items.append(fx.telegraph_line(pos, _aim_yaw, 14.0, 0.7, tele, col))
+			"circles":
+				_barrage_pts.clear()
+				var pp: Vector3 = p.global_position
+				_barrage_pts.append(Vector3(pp.x, 0, pp.z))
+				for i in int(_atk["n"]) - 1:
+					var a := randf() * TAU
+					var r := randf_range(2.0, 8.0)
+					_barrage_pts.append(Vector3(pp.x + cos(a) * r, 0, pp.z + sin(a) * r))
+				for bp in _barrage_pts:
+					_tele_items.append(fx.telegraph_circle(bp, float(_atk["radius"]), tele, col))
+			"summon":
+				_tele_items.append(fx.telegraph_circle(pos, float(_atk["radius"]), tele, Color(0.75, 0.3, 1.0)))
+	AudioManager.sfx_at("telegraph", global_position, -8.0)
+	var an := String(_atk["anim"])
+	rig.play("windup" if an in ["slam", "swing", "windup"] else an, tele + 0.05)
+	if an in ["roar", "summon", "shoot"]:
+		rig.play(an, tele + float(_atk["recover"]) * 0.5)
+
+
+func _tele_tick(delta: float, _p: Player) -> void:
+	_t -= delta
+	rotation.y = _aim_yaw
+	_move_toward_dir(Vector3.ZERO, 0.0, delta)
+	if _t <= 0.0:
+		_execute_attack()
+
+
+func _execute_attack() -> void:
+	var p := _player()
+	_clear_tele()
+	var a := _atk
+	var dmg := dmg_base * float(a["dmg"])
+	var an := String(a["anim"])
+	if an in ["slam", "swing"]:
+		rig.play(an, 0.45)
+	_cds[_atk_name] = float(a["cd"]) * randf_range(0.9, 1.15)
+	var shape := String(a["shape"])
+	_t = 0.12
+	match shape:
+		"cone":
+			if a.has("proj"):
+				_fire_projectiles(dmg)
+			elif p != null:
+				var to := _flat_to(p)
+				var ang := absf(rad_to_deg(_aim_dir.angle_to(to)))
+				if to.length() <= float(a["radius"]) + 0.45 and ang <= float(a["angle"]) * 0.5 + 6.0:
+					p.take_damage(dmg, global_position, {"src": "melee", "enemy": self})
+			_fx_impact(global_position + _aim_dir * 1.5, float(a.get("radius", 3.0)) * 0.5, float(a.get("shake", 0.2)))
+			_after_act()
+		"circle":
+			if a.has("proj"):
+				_fire_projectiles(dmg)
+			elif p != null and _flat_to(p).length() <= float(a["radius"]) + 0.4:
+				p.take_damage(dmg, global_position, {"src": "slam", "enemy": self})
+			_fx_impact(global_position, float(a["radius"]), float(a.get("shake", 0.3)))
+			_after_act()
+		"circles":
+			for bp in _barrage_pts:
+				if p != null:
+					var d: Vector3 = p.global_position - bp
+					d.y = 0.0
+					if d.length() <= float(a["radius"]) + 0.4:
+						p.take_damage(dmg, bp, {"src": "barrage", "enemy": self})
+						_barrage_pts = []
+						break
+			if GameState.fx != null:
+				for bp in _barrage_pts:
+					GameState.fx.ring(bp, float(a["radius"]), Color(1.0, 0.5, 0.2, 0.85), 0.35, 0.3)
+					GameState.fx.burst(bp + Vector3(0, 0.4, 0), Color(1.0, 0.6, 0.2), 6, 5.0, 0.14, 0.4)
+			AudioManager.sfx_at("explosion", global_position, -6.0)
+			_barrage_pts = []
+			_after_act()
+		"aim":
+			_fire_projectiles(dmg)
+			_after_act()
+		"line":
+			_dash_left = float(a["length"]) / float(a["dash_speed"])
+			_t = _dash_left
+			_set_state(S.ACT)
+			rig.play("windup", _dash_left)
+			rig.charging = true
+			AudioManager.sfx_at("dodge", global_position, -6.0)
+		"summon":
+			var n := int(a.get("count", 2))
+			var minion := "thief"
+			if kind == "boss":
+				minion = "ranged" if phase >= 2 and randf() < 0.4 else "thief"
+				n += phase - 1
+			elif arena_index >= 6 and randf() < 0.4:
+				minion = "runner"
+			for i in n:
+				var ang := TAU * float(i) / float(n) + randf() * 0.5
+				var sp := global_position + Vector3(cos(ang), 0, sin(ang)) * (2.0 + vscale)
+				request_spawn.emit(minion, sp)
+			_fx_impact(global_position, float(a["radius"]), 0.15)
+			_after_act()
+
+
+func _act_tick(delta: float, p: Player) -> void:
+	# fase activa: solo las cargas (línea) pasan por aquí
+	if _dash_left > 0.0:
+		_dash_left -= delta
+		var sp := float(_atk["dash_speed"])
+		var dir := _aim_dir
+		var hv := dir * sp
+		velocity.x = hv.x
+		velocity.z = hv.z
+		if is_on_floor():
+			velocity.y = -1.0
+		else:
+			velocity.y -= GRAVITY * delta
+		move_and_slide()
+		if p != null and not _dash_hit:
+			var d := _flat_to(p)
+			if d.length() < float(_atk["width"]) * 0.5 + 0.7:
+				_dash_hit = true
+				p.take_damage(dmg_base * float(_atk["dmg"]), global_position, {"src": "charge", "enemy": self})
+		if is_on_wall() and kind != "boss":
+			_dash_left = 0.0
+		if _dash_left <= 0.0:
+			rig.charging = false
+			_fx_impact(global_position, 2.0, 0.25)
+			_after_act()
+		return
+	_t -= delta
+	_move_toward_dir(Vector3.ZERO, 0.0, delta)
+	if _t <= 0.0:
+		_after_act()
+
+
+func _after_act() -> void:
+	rig.charging = false
+	var rec := float(_atk.get("recover", 0.6))
+	if kind == "boss":
+		rec *= 1.0 - 0.12 * (phase - 1)
+	_t = rec
+	_gate = (0.35 if not is_boss else 0.55) + randf() * 0.4
+	_set_state(S.RECOVER)
+
+
+func _fire_projectiles(dmg: float) -> void:
+	var pr = GameState.projectiles
+	if pr == null:
+		return
+	var a := _atk
+	var n := int(a.get("count", 1))
+	var spread := deg_to_rad(float(a.get("spread", 0.0)))
+	var from := global_position + Vector3(0, 1.3 * vscale, 0) + _aim_dir * 0.7 * vscale
+	var pk := String(a.get("proj", "coin"))
+	var spd := float(a.get("speed", 12.0))
+	var full_circle := float(a.get("spread", 0.0)) >= 359.0
+	for i in n:
+		var ang := 0.0
+		if n > 1:
+			ang = TAU * float(i) / float(n) if full_circle else lerpf(-spread * 0.5, spread * 0.5, float(i) / float(n - 1))
+		var d := _aim_dir.rotated(Vector3.UP, ang)
+		var radius := 0.34 if pk == "blob" else 0.3
+		pr.fire_enemy(pk, from, d, dmg, spd, radius, 4.5)
+	AudioManager.sfx_at("enemy_shoot", global_position, -6.0)
+
+
+func _fx_impact(pos: Vector3, radius: float, shake: float) -> void:
+	var fx = GameState.fx
+	if fx != null:
+		fx.ring(pos, radius, Color(1.0, 0.55, 0.25, 0.8), 0.3, 0.3)
+		fx.burst(pos + Vector3(0, 0.3, 0), Color(0.9, 0.8, 0.6), 5, 4.0, 0.12, 0.35)
+	var p = GameState.player
+	if shake > 0.0 and p != null and GameState.cam != null:
+		if global_position.distance_to(p.global_position) < 18.0:
+			GameState.cam.shake(shake * (1.0 if is_boss else 0.6))
+	if shake >= 0.4:
+		AudioManager.sfx_at("slam", pos, -4.0)
+
+
+func _clear_tele() -> void:
+	var fx = GameState.fx
+	if fx != null:
+		for it in _tele_items:
+			if it != null:
+				fx.cancel(it)
+	_tele_items.clear()
+
+
+func _interrupt() -> void:
+	_clear_tele()
+	_barrage_pts.clear()
+	rig.charging = false
+	_dash_left = 0.0
+	rig.action = ""
+
+
+# ------------------------------------------------------------------ daño y estados
+## Devuelve true si el golpe mata al enemigo.
+func take_damage(dmg: float, info: Dictionary = {}) -> bool:
+	if not alive or state == S.DEAD:
+		return false
+	if state == S.SPAWN:
+		return false
+	var fx = GameState.fx
+	if invuln_t > 0.0:
+		if fx != null:
+			fx.damage_number(global_position + Vector3(0, 2.2 * vscale, 0), "¡INMUNE!", Color(0.7, 0.7, 0.8), 0.8)
+		return false
+	dmg = maxf(0.0, dmg)
+	hp -= dmg
+	_since_hit = 0.0
+	GameState.run_stats["damage_dealt"] += dmg
+	var crit: bool = info.get("crit", false)
+	var element: String = info.get("element", "phys")
+	var src: String = info.get("src", "")
+	if fx != null:
+		var col: Color = Combat.COLORS.get("crit" if crit else element, Color.WHITE)
+		if src == "burn":
+			col = Combat.COLORS["fire"]
+		var sz := 1.0 + clampf(dmg / maxf(1.0, max_hp) * 3.0, 0.0, 0.7) + (0.35 if crit else 0.0)
+		if src != "burn" or randf() < 0.5:
+			fx.damage_number(global_position + Vector3(randf_range(-0.3, 0.3), 2.1 * vscale, randf_range(-0.3, 0.3)), str(int(round(dmg))) + ("!" if crit else ""), col, sz, crit)
+	if src != "burn":
+		rig.hit_flash(0.7)
+		if src != "chain":
+			AudioManager.sfx_at("crit" if crit else "hit_%d" % (randi() % 3), global_position, -7.0)
+	var kb: Vector3 = info.get("knock", Vector3.ZERO)
+	if kb.length() > 0.01:
+		_kb += kb * (1.0 - float(def.get("knock_res", 0.0))) * 1.6
+		_kb.y = 0.0
+	if aggro_range < 900.0 and state == S.PATROL:
+		_set_state(S.CHASE)
+		aggro_range = 999.0
+	if is_boss:
+		GameState.boss_bar.emit(true, display_name, maxf(hp, 0.0), max_hp)
+	_update_bar()
+	if hp <= 0.0:
+		_die(info)
+		return true
+	# interrupción: los enemigos ligeros pierden el ataque al ser golpeados
+	var light := float(def.get("knock_res", 0.0)) < 0.3
+	if light and src != "burn" and src != "chain" and dmg > 0.0:
+		if state == S.TELE or state == S.CHASE or state == S.RECOVER or state == S.PATROL:
+			if state == S.TELE:
+				_interrupt()
+				_cds[_atk_name] = float(_atk.get("cd", 1.0)) * 0.5
+			_t = 0.22 if crit else 0.14
+			_set_state(S.HURT)
+			rig.play("stagger", _t + 0.1)
+	var stagger: float = info.get("stagger", 0.0)
+	if stagger > 0.0 and not is_boss and state != S.DEAD:
+		_interrupt()
+		_t = stagger
+		_set_state(S.HURT)
+		rig.play("stagger", stagger)
+	# fases del jefe
+	if kind == "boss":
+		var f := hp_frac()
+		var np := 1 if f > 0.66 else (2 if f > 0.33 else 3)
+		if np > phase:
+			_enter_phase(np)
+	return false
+
+
+func _enter_phase(np: int) -> void:
+	phase = np
+	_interrupt()
+	invuln_t = 1.8
+	_t = 1.8
+	_set_state(S.PHASE)
+	rig.play("roar", 1.6)
+	move_speed *= 1.1
+	_cds.clear()
+	if GameState.fx != null:
+		GameState.fx.ring(global_position, 9.0, Color(1.0, 0.3, 0.3, 0.9), 0.8, 0.5)
+		GameState.fx.flash_sphere(global_position + Vector3(0, 1.5, 0), 3.5, Color(1.0, 0.4, 0.3, 0.6), 0.5)
+	if GameState.cam != null:
+		GameState.cam.shake(0.8)
+	AudioManager.sfx("phase")
+	AudioManager.sfx("boss_roar", -2.0)
+	GameState.toast_msg("¡%s entra en FASE %d!" % [display_name, np], Color(1.0, 0.45, 0.35))
+	for i in 3:
+		var ang := TAU * float(i) / 3.0 + randf()
+		request_spawn.emit("thief" if np == 2 else "runner", global_position + Vector3(cos(ang), 0, sin(ang)) * 4.5)
+
+
+func _die(info: Dictionary) -> void:
+	alive = false
+	hp = 0.0
+	state = S.DEAD
+	_interrupt()
+	_dead_t = 1.2
+	_col.disabled = true
+	if _bar != null:
+		_bar.visible = false
+	rig.die(0.9)
+	velocity = Vector3.ZERO
+	AudioManager.sfx_at("kill", global_position, -3.0)
+	if GameState.fx != null:
+		GameState.fx.burst(global_position + Vector3(0, 1.0, 0), Color(1.0, 0.9, 0.5), 10 if not is_boss else 24, 6.0, 0.14, 0.6)
+	if is_boss:
+		GameState.boss_bar.emit(false, display_name, 0.0, max_hp)
+		GameState.run_stats["bosses"] += 1 if kind == "boss" else 0
+		if GameState.cam != null:
+			GameState.cam.shake(0.9)
+	if affix == "explosivo":
+		_boom_t = 0.7
+		if GameState.fx != null:
+			GameState.fx.telegraph_circle(global_position, 3.2, 0.7, Color(1.0, 0.45, 0.1))
+	set_status_clear()
+	Combat.on_kill(self, info)
+	GameState.register_kill(self, xp_value, coin_value)
+	died.emit(self)
+
+
+func set_status_clear() -> void:
+	marked_t = 0.0
+	slow_t = 0.0
+	burn_t = 0.0
+	freeze_t = 0.0
+
+
+func _dead_tick(delta: float) -> void:
+	_dead_t -= delta
+	if _boom_t > 0.0:
+		_boom_t -= delta
+		if _boom_t <= 0.0:
+			_boom_t = -1.0
+			var p := _player()
+			if GameState.fx != null:
+				GameState.fx.ring(global_position, 3.2, Color(1.0, 0.5, 0.15, 0.9), 0.35, 0.3)
+				GameState.fx.flash_sphere(global_position + Vector3(0, 0.6, 0), 1.8, Color(1.0, 0.6, 0.2, 0.8), 0.25)
+			AudioManager.sfx_at("explosion", global_position, -3.0)
+			if p != null and _flat_to(p).length() < 3.4:
+				p.take_damage(dmg_base * 1.3, global_position, {"src": "explosion", "enemy": self})
+	if _dead_t <= 0.0 and _boom_t < 0.0:
+		visible = false
+		set_physics_process(false)
+		despawned.emit(self)
+
+
+func _tick_status(delta: float) -> void:
+	if marked_t > 0.0:
+		marked_t -= delta
+	if slow_t > 0.0:
+		slow_t -= delta
+	if burn_t > 0.0:
+		burn_t -= delta
+		_burn_tick -= delta
+		if _burn_tick <= 0.0:
+			_burn_tick = 0.5
+			take_damage(burn_dps * 0.5, {"src": "burn", "element": "fire"})
+			if state == S.DEAD:
+				return
+	if affix == "regenerante" and _since_hit > 3.0 and hp < max_hp:
+		hp = minf(max_hp, hp + max_hp * 0.04 * delta)
+		_update_bar()
+
+
+func apply_burn(dps: float, dur: float) -> void:
+	if not alive:
+		return
+	burn_dps = maxf(burn_dps if burn_t > 0.0 else 0.0, dps)
+	burn_t = maxf(burn_t, dur)
+
+
+func apply_slow(amt: float, dur: float) -> void:
+	if not alive:
+		return
+	slow_amt = clampf(maxf(amt, slow_amt if slow_t > 0.0 else 0.0), 0.0, 0.7 if not is_boss else 0.35)
+	slow_t = maxf(slow_t, dur)
+
+
+func apply_freeze(dur: float) -> void:
+	if not alive or is_boss or state == S.SPAWN or state == S.DEAD:
+		return
+	_interrupt()
+	freeze_t = dur
+	_set_state(S.FROZEN)
+
+
+func apply_mark(dur: float) -> void:
+	if alive:
+		marked_t = maxf(marked_t, dur)
+
+
+func _update_visual_status() -> void:
+	if rig == null:
+		return
+	var frost := 1.0 if state == S.FROZEN else (0.45 if slow_t > 0.0 else 0.0)
+	var burn := 1.0 if burn_t > 0.0 else 0.0
+	var tint := Color(1, 1, 1)
+	if affix != "" and EnemyDefs.AFFIXES.has(affix):
+		tint = EnemyDefs.AFFIXES[affix]["tint"]
+	if marked_t > 0.0:
+		tint = tint.lerp(Color(0.85, 0.4, 1.0), 0.55)
+	var key := "%s|%s|%s" % [frost, burn, tint]
+	if key == _vis_key:
+		return
+	_vis_key = key
+	rig.set_status_visual(frost, burn, tint)
+
+
+func _apply_visual(tint: Color) -> void:
+	_vis_key = ""
+	rig.set_status_visual(0.0, 0.0, tint)
+
+
+func debug_text() -> String:
+	return "%s %s hp %.0f/%.0f st %d" % [kind, affix, hp, max_hp, state]
