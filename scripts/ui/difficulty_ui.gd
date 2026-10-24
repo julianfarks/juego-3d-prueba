@@ -11,6 +11,13 @@ var _panel: PanelContainer
 var _scroll: ScrollContainer
 var _list: VBoxContainer
 var _msg: Label
+const DRAG_DEADZONE := 14.0          # px antes de considerar que el gesto es un desplazamiento y no una pulsación
+var _drag_active := false
+var _drag_moved := false
+var _drag_start := Vector2.ZERO
+var _drag_last := Vector2.ZERO
+var _drag_vel := 0.0
+var _inertia := 0.0
 
 
 func _ready() -> void:
@@ -85,9 +92,90 @@ func _layout() -> void:
 	_panel.custom_minimum_size = Vector2.ZERO
 
 
+## Desplazamiento táctil: los botones de las tarjetas consumen el gesto, así que el arrastre se gestiona aquí
+## (igual que en la tienda). Deslizar nunca pulsa un botón; una pulsación corta sí.
+func _input(event: InputEvent) -> void:
+	if _scroll == null or not is_visible_in_tree():
+		return
+	var pos := Vector2.ZERO
+	var kind := ""
+	if event is InputEventScreenTouch:
+		pos = event.position
+		kind = "down" if event.pressed else "up"
+	elif event is InputEventScreenDrag:
+		pos = event.position
+		kind = "move"
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			if _drag_moved:
+				get_viewport().set_input_as_handled()
+				if not event.pressed:
+					_end_drag()
+			return
+		pos = event.position
+		kind = "down" if event.pressed else "up"
+	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			if _drag_moved:
+				get_viewport().set_input_as_handled()
+			return
+		pos = event.position
+		kind = "move"
+	else:
+		return
+	match kind:
+		"down":
+			if _scroll.get_global_rect().has_point(pos):
+				_drag_active = true
+				_drag_moved = false
+				_drag_start = pos
+				_drag_last = pos
+				_drag_vel = 0.0
+				_inertia = 0.0
+		"move":
+			if not _drag_active:
+				return
+			if not _drag_moved:
+				if absf(pos.y - _drag_start.y) < DRAG_DEADZONE:
+					return
+				_drag_moved = true
+				_cancel_press_at(_drag_start)
+			_scroll.scroll_vertical -= int(round(pos.y - _drag_last.y))
+			_drag_vel = lerpf(_drag_vel, pos.y - _drag_last.y, 0.5)
+			_drag_last = pos
+			get_viewport().set_input_as_handled()
+		"up":
+			if _drag_active and _drag_moved:
+				get_viewport().set_input_as_handled()
+				_inertia = _drag_vel * 60.0
+			_end_drag()
+
+
+func _cancel_press_at(pos: Vector2) -> void:
+	for b in _list.find_children("*", "Button", true, false):
+		var bt := b as Button
+		if bt.get_global_rect().has_point(pos):
+			var was := bt.disabled
+			bt.disabled = true
+			bt.disabled = was
+
+
+func _end_drag() -> void:
+	_drag_active = false
+	_drag_moved = false
+
+
 func _process(delta: float) -> void:
 	if _scroll == null or not is_visible_in_tree():
 		return
+	if absf(_inertia) > 20.0 and not _drag_active:
+		var before := _scroll.scroll_vertical
+		_scroll.scroll_vertical = before - int(round(_inertia * delta))
+		_inertia *= exp(-delta * 4.5)
+		if _scroll.scroll_vertical == before:
+			_inertia = 0.0
+	else:
+		_inertia = 0.0
 	var a := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
 	if absf(a) > 0.25:
 		_scroll.scroll_vertical += int(a * 900.0 * delta)

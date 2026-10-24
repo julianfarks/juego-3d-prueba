@@ -98,6 +98,7 @@ func _stage1() -> void:
 	ok(String(SaveSystem.get_run()["stage"]) == "fight", "F5 el punto de control inicial es 'fight'")
 	GameState.add_coins(77, false)
 	Config.dev_god_mode = true
+	LawPerks.forced_roll = 0.99          # sin cofre adicional por ronda perfecta (esta prueba cubre el flujo del cofre normal)
 	main.arena.force_complete()
 	var t := 0.0
 	while main.arena.phase != Arena.Phase.CLEARED and t < 20.0:

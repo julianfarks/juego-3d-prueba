@@ -36,6 +36,18 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Ajustes → **CÓDIGOS** → escribir el código de desarrollador → aparece el menú **DESARROLLADOR** en Ajustes (se recuerda entre sesiones; se puede ocultar). Permite sumar dinero y honorarios (botones o cantidad libre), agregar cualquier mejora con rareza y cantidad (respetando sus máximos), modo Dios, saltar de arena y depuración. El código se guarda solo como hash SHA-256.
 
+## Novedades 0.12.0 — ataques que acompañan al maletín, jefes con ataques propios, botín especial y reanimación
+- **Ataques secundarios del maletín** (`scripts/combat/case_mods.gd`, módulo `CaseMods` enganchado en `CaseThrow`): Cuchillas del Litigio, Misiles del Bufete, Rayos de la Fiscalía, Órbita de Navajas, Lluvia de Expedientes, Doble Maletín Fantasma, Discos Judiciales, Láser de Sentencia, Explosión de Apertura, Rayo de Regreso, Lluvia de Cuchillas, Onda de Choque, Granada de Papeles y Persecución Judicial. Se suman a los ya existentes (Cohetes de Objeción, Cadena Eléctrica, Detonación de Impacto, Rebote Procesal). Cada uno tiene comportamiento y aspecto propios.
+- **10 mejoras de proyectiles**: Más Cuchillas, Más Misiles, Tormenta de Rayos, Alcance Secundario, Proyectiles Perforantes, Proyectil Extra, Doble Activación (salva al salir y al regresar), Fisión de Proyectiles, Guiado Secundario y Detonaciones Múltiples; más Cadencia, Retorno Express y Cargador de Maletines.
+- **9 sinergias** que cambian el combate: Cuchillas Rebotadas, Salva Total, Tormenta Fiscal, Zona Cero, Regreso Relámpago, Legión Espectral, Expedientes Teledirigidos, Fisión Eléctrica y Sentencia Afilada.
+- **Límites de seguridad**: máx. 36 proyectiles secundarios, 7 maletines, 6 zonas, 18 navajas orbitales, 14 explosiones/s; los proyectiles derivados no generan más derivados.
+- **Jefes**: cada bioma tiene su jefe (nombre, color, tamaño y 5+ ataques propios, incluidos saltos y rayos).
+- **Botín especial del jefe**: 3 opciones de categorías distintas (poder del maletín / efectos de combate / economía y supervivencia), con +1 nivel de regalo; varían entre jefes y partidas y se suman a las 2 elecciones normales del cofre.
+- **Poderes que crecen con el tiempo** (con tope) y **economía/supervivencia**: Comisión por Baja, Honorarios Rápidos, Honorarios de Jefe Limpio, Cobro por Impacto, Escudo de Despacho y 3 artículos nuevos de tienda.
+- **Reanimación con anuncios recompensados** (proveedor de PRUEBA, sin SDK; ver `docs/ANUNCIOS.md`).
+- Corregido: la «Mesa del Juez» ahora se desplaza con el dedo aunque se empiece sobre un botón; un bucle infinito al planificar copias fantasma con rareza alta.
+- Pruebas: `--attacktest`, `--bosstest`, `--revivetest`, `--lawtest`, `--difftest`.
+
 ## Novedades 0.11.0 — cofres por rendimiento, 15 poderes judiciales, tienda y economía ampliadas
 - **Ronda perfecta**: si pierdes como máximo el 20 % de tu vida máxima real en la ronda (se mide por golpe, el escudo no cuenta y curarse no oculta el daño) hay un 50 % de «COFRE EXTRA». Se comprueba una sola vez por ronda, se guarda y no se repite al cargar. El portal espera a abrir los dos cofres.
 - **Cofre doble**: cada cofre tiene un 50 % de dejar elegir **dos** recompensas independientes (la segunda no repite la primera). No se acumula con el doble de los cofres de jefe (máx. 2 por cofre).
