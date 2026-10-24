@@ -291,11 +291,10 @@ func _ui_part() -> void:
 	await _tap(_button(ui2, "CERRAR"))
 	await _secs(0.6)
 	ok(_overlay(CardSelect) == cs and is_instance_valid(cs), "I43 el cofre sigue abierto (no se destruye)")
-	ok(cs._free_reroll and cs._reroll.text.contains("GRATIS"), "I44 tras liberar un espacio se ofrece un relanzamiento GRATIS")
-	var coins2 := GameState.coins
-	await _tap(cs._reroll)
-	await _secs(0.5)
-	ok(GameState.coins == coins2 and not cs._free_reroll, "I45 el relanzamiento gratis no cuesta monedas y se gasta una vez")
+	ok(_button(cs, "Relanzar") == null and _button(cs, "RELANZAR") == null and cs.get("_reroll") == null, "I44 el cofre ya no tiene botón de relanzar (tampoco gratis tras liberar un espacio)")
+	var cards_after := cs._cards.duplicate(true)
+	await _secs(0.3)
+	ok(cs._cards.size() == cards_after.size() and cs._cards[0]["id"] == cards_after[0]["id"], "I45 liberar un espacio NO regenera las cartas del cofre")
 	var some_new := false
 	for c in cs._cards:
 		if b.count_of(c["id"]) == 0:

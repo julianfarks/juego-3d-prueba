@@ -218,7 +218,7 @@ static func register() -> void:
 	UpgradeDB.add_def("burn_spread", "Contagio Ardiente", "elem", "fire2", "{v} de prob. de que un enemigo en llamas propague el fuego al morir", {"burn_spread": 0.1}, "p", 8, ["fuego"], {})
 	UpgradeDB.add_def("burn_dps2", "Gasolina Notarial", "elem", "flame", "Daño por segundo de tus quemaduras de golpe +{v}", {"burn_dps": 4.0}, "n", 10, ["fuego"], {"req": {"owns": ["hot_ink"]}})
 	UpgradeDB.add_def("chest_cards", "Cofre Generoso", "eco", "gem", "Los cofres ofrecen +{v} carta más", {"chest_cards": 1.0}, "i", 2, ["monedas"], {"flat": true, "rarities": [2, 3], "req": {"arena": 5}})
-	UpgradeDB.add_def("reroll_cut", "Relanzamiento Barato", "eco", "dice", "El relanzamiento de cartas cuesta -{v}", {"reroll_cut": 0.1}, "p", 6, ["monedas"], {})
+	UpgradeDB.add_def("reroll_cut", "Relanzamiento Barato", "eco", "dice", "Relanzar las ofertas de la tienda cuesta -{v}", {"reroll_cut": 0.1}, "p", 6, ["monedas"], {})
 	UpgradeDB.add_def("skip_bonus", "Descarte Rentable", "eco", "coin", "Descartar una carta da +{v} de monedas", {"skip_bonus": 0.25}, "p", 8, ["monedas"], {})
 	UpgradeDB.add_def("sell_bonus", "Buen Negociante", "eco", "handshake", "Las mejoras se venden por +{v}", {"sell_bonus": 0.1}, "p", 8, ["monedas"], {})
 	UpgradeDB.add_def("clear_coins", "Bonificación de Cierre", "eco", "coin", "Al completar una arena: +{v} monedas", {"clear_coins": 4.0}, "i", 10, ["monedas"], {})

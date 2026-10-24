@@ -1,8 +1,8 @@
 class_name CardSelect
 extends Control
 ## Selección de mejoras: tres cartas (rareza, categoría, icono, valores reales, apilado y sinergias
-## posibles). Tocar una carta la selecciona; "ELEGIR" confirma. Permite relanzar (cuesta monedas)
-## o descartar a cambio de monedas.
+## posibles). Tocar una carta la selecciona; "ELEGIR" confirma. Permite descartar a cambio de monedas.
+## Un cofre ofrece SOLO las cartas que contiene: no hay relanzamiento (el relanzamiento vive en la tienda).
 
 signal picked(card: Dictionary)
 signal closed
@@ -13,16 +13,13 @@ var _cards: Array = []
 var _selected := -1
 var _card_nodes: Array = []
 var _confirm: Button
-var _reroll: Button
 var _skip: Button
-var _rerolls := 0
 var _row: HBoxContainer
 var _title: Label
 var _depth := 0
 var source := "chest"
 var _inv_info: Label
 var _inv_btn: Button
-var _free_reroll := false     # tras liberar un espacio se relanza gratis una vez
 var _inv_changed := false
 
 
@@ -50,9 +47,6 @@ func _ready() -> void:
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	btns.add_theme_constant_override("separation", 18)
 	root.add_child(btns)
-	_reroll = UIKit.button("Relanzar", Vector2(260, 62), 24)
-	_reroll.pressed.connect(_on_reroll)
-	btns.add_child(_reroll)
 	_confirm = UIKit.accent_button("ELEGIR", Vector2(300, 66), 30)
 	_confirm.pressed.connect(_on_confirm)
 	btns.add_child(_confirm)
@@ -66,10 +60,6 @@ func _ready() -> void:
 
 func _skip_value() -> int:
 	return int(round((15 + int(GameState.arena_index * 2)) * (1.0 + GameState.build.s("skip_bonus"))))
-
-
-func _reroll_cost() -> int:
-	return int(round(20.0 * pow(1.5, _rerolls) * (1.0 - minf(GameState.build.s("reroll_cut"), 0.6))))
 
 
 func open(depth: int, p_min_rarity := 0, p_source := "chest", count := 3) -> void:
@@ -183,14 +173,15 @@ func _select(i: int) -> void:
 	_update_buttons()
 
 
-## Llamado cuando se cierra el inventario: si se liberó un espacio, se relanzan las cartas gratis (una vez).
+## Llamado cuando se cierra el inventario. Las cartas del cofre NO se regeneran (ni gratis): solo se actualiza el estado
+## de los botones y se deselecciona una carta que ya no se pueda elegir.
 func on_inventory_closed(changed: bool) -> void:
 	if changed:
 		_inv_changed = true
-		_free_reroll = true
-		_roll(_cards.size())
-	else:
-		_update_buttons()
+		if _selected >= 0 and _selected < _cards.size() and not GameState.build.can_add(_cards[_selected]["id"]):
+			_selected = -1
+			_rebuild()
+	_update_buttons()
 
 
 func _update_buttons() -> void:
@@ -203,20 +194,6 @@ func _update_buttons() -> void:
 		_inv_info.add_theme_color_override("font_color", UIKit.TEXT_DIM)
 	_confirm.disabled = _selected < 0
 	_confirm.text = "ELEGIR" if _selected >= 0 else "Toca una carta"
-	_reroll.text = "Relanzar (%d $)" % _reroll_cost() if not _free_reroll else "Relanzar (GRATIS)"
-	_reroll.disabled = GameState.coins < _reroll_cost() and not _free_reroll
-
-
-func _on_reroll() -> void:
-	if _free_reroll:
-		_free_reroll = false
-	elif not GameState.spend_coins(_reroll_cost()):
-		AudioManager.sfx("deny")
-		return
-	else:
-		_rerolls += 1
-	AudioManager.sfx("buy")
-	_roll(_cards.size())
 
 
 func _on_confirm() -> void:

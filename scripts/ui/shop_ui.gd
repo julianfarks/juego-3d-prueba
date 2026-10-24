@@ -6,10 +6,24 @@ extends Control
 
 signal closed
 
+## Estado de la VISITA (lo crea Main al empezar cada arena y se comparte con cada apertura de la interfaz):
+## ofertas actuales, relanzamientos usados y profundidad. Cerrar y volver a abrir la tienda en la misma visita
+## NO regenera las ofertas ni reinicia el límite de relanzamientos.
+var visit: Dictionary = {}
+const MAX_REROLLS := 3
+const DRAG_DEADZONE := 14.0           # píxeles antes de considerar que el gesto es un desplazamiento y no una pulsación
 var _offers: Array = []
 var _list: VBoxContainer
 var _coins_label: Label
 var _confirm_box: Control
+var _sc: ScrollContainer
+var _reroll_btn: Button
+var _drag_active := false           # hay un gesto de dedo/ratón empezado dentro de la lista
+var _drag_moved := false            # ese gesto ya es un desplazamiento (se ignora para comprar)
+var _drag_start := Vector2.ZERO
+var _drag_last := Vector2.ZERO
+var _drag_vel := 0.0
+var _inertia := 0.0
 static var purchases := 0         # compras de la partida actual (reinicia Main al empezar)
 
 const ATTR_CATS := ["dmg", "speed", "atk", "crit", "hp", "shield"]
@@ -30,25 +44,124 @@ func _ready() -> void:
 	_coins_label = UIKit.label("", 32, Color(1.0, 0.85, 0.3), HORIZONTAL_ALIGNMENT_RIGHT)
 	head.add_child(_coins_label)
 	var sc := ScrollContainer.new()
+	sc.name = "ShopScroll"
+	_sc = sc
 	sc.custom_minimum_size = Vector2(940, 400)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# el desplazamiento táctil lo gestiona _input (funciona también sobre las cartas y los botones)
 	v.add_child(sc)
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.add_theme_constant_override("separation", 6)
 	sc.add_child(_list)
+	# cabecera y pie fijos: el dinero y el título arriba; relanzar y salir siempre a la vista abajo
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_CENTER
+	foot.add_theme_constant_override("separation", 16)
+	v.add_child(foot)
+	_reroll_btn = UIKit.button("RELANZAR OFERTAS", Vector2(520, 66), 24)
+	_reroll_btn.name = "Shop_reroll"
+	_reroll_btn.pressed.connect(_ask_reroll)
+	foot.add_child(_reroll_btn)
 	var close := UIKit.accent_button("Salir de la tienda", Vector2(360, 66), 28)
-	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.name = "Shop_close"
 	close.pressed.connect(func():
 		AudioManager.sfx("click")
 		closed.emit()
 		queue_free())
-	v.add_child(close)
+	foot.add_child(close)
 	GameState.coins_changed.connect(func(_c): _refresh())
 
 
 func open(depth: int) -> void:
-	_generate(depth)
+	if visit.is_empty():
+		visit["rerolls"] = 0
+		visit["depth"] = depth
+	if not visit.has("offers"):
+		_generate(depth)
+		visit["offers"] = _offers
+	else:
+		_offers = visit["offers"]
 	_refresh()
+
+
+# ------------------------------------------------------------------ relanzar ofertas (máx. 3 por visita)
+func rerolls_used() -> int:
+	return int(visit.get("rerolls", 0))
+
+
+func reroll_cost() -> int:
+	## Mismo cálculo que la economía existente de relanzamientos (20 $ ×1,5 por uso, reducido por «Relanzamiento Barato»).
+	return int(round(20.0 * pow(1.5, rerolls_used()) * (1.0 - minf(GameState.build.s("reroll_cut"), 0.6))))
+
+
+func _reroll_label() -> String:
+	if rerolls_used() >= MAX_REROLLS:
+		return "RELANZAMIENTOS AGOTADOS — %d/%d" % [MAX_REROLLS, MAX_REROLLS]
+	return "RELANZAR (%d $) — %d/%d" % [reroll_cost(), rerolls_used() + 1, MAX_REROLLS]
+
+
+func _ask_reroll() -> void:
+	if rerolls_used() >= MAX_REROLLS:
+		AudioManager.sfx("deny")
+		GameState.toast_msg("Ya usaste los %d relanzamientos de esta visita" % MAX_REROLLS, UIKit.BAD)
+		return
+	var cost := reroll_cost()
+	if GameState.coins < cost:
+		AudioManager.sfx("deny")
+		GameState.toast_msg("No tienes suficientes monedas (relanzar cuesta %d $)" % cost, UIKit.BAD)
+		return
+	AudioManager.sfx("click")
+	if _confirm_box != null:
+		_confirm_box.queue_free()
+	_confirm_box = Control.new()
+	_confirm_box.name = "RerollConfirm"
+	_confirm_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_confirm_box.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_confirm_box)
+	_confirm_box.add_child(UIKit.dim_background(0.6))
+	var v := UIKit.center_box(_confirm_box, Vector2(640, 260))
+	v.add_child(UIKit.label("¿Relanzar las ofertas?", 32, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER))
+	v.add_child(UIKit.label("Precio: %d $   ·   Saldo: %d $   ·   Uso %d/%d" % [cost, GameState.coins, rerolls_used() + 1, MAX_REROLLS], 24, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(row)
+	var no := UIKit.button("Cancelar", Vector2(240, 64), 26)
+	no.name = "Reroll_no"
+	no.pressed.connect(func(): _confirm_box.queue_free())
+	row.add_child(no)
+	var yes := UIKit.accent_button("Confirmar", Vector2(260, 64), 28)
+	yes.name = "Reroll_yes"
+	yes.pressed.connect(func():
+		_confirm_box.queue_free()
+		do_reroll())
+	row.add_child(yes)
+
+
+## Cobra y sustituye las ofertas. Devuelve true si se relanzó. Valida límite y saldo (nunca cobra si falla).
+func do_reroll() -> bool:
+	if rerolls_used() >= MAX_REROLLS:
+		return false
+	var cost := reroll_cost()
+	if not GameState.spend_coins(cost):
+		AudioManager.sfx("deny")
+		return false
+	visit["rerolls"] = rerolls_used() + 1
+	# lo ya agotado de una sola vez (Segunda Opinión) no vuelve a aparecer como disponible
+	var sold_ids := {}
+	for o in _offers:
+		if o["type"] == "revive" and o["sold"]:
+			sold_ids["revive"] = true
+	_generate(int(visit.get("depth", GameState.arena_index)))
+	for o in _offers:
+		if sold_ids.has(o["type"]):
+			o["sold"] = true
+	visit["offers"] = _offers
+	AudioManager.sfx("buy")
+	GameState.toast_msg("Ofertas renovadas (-%d $)" % cost, UIKit.GOOD)
+	_refresh()
+	_sc.scroll_vertical = 0
+	return true
 
 
 func price_of(base: float) -> int:
@@ -88,10 +201,19 @@ func _refresh() -> void:
 	if _list == null:
 		return
 	_coins_label.text = "$ %d" % GameState.coins
+	var keep := _sc.scroll_vertical
 	for c in _list.get_children():
+		_list.remove_child(c)
 		c.queue_free()
 	for i in _offers.size():
 		_list.add_child(_row_for(i))
+	var pad := Control.new()                 # margen final: la última oferta nunca queda pegada al borde
+	pad.custom_minimum_size = Vector2(0, 14)
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_list.add_child(pad)
+	_sc.set_deferred("scroll_vertical", keep)
+	_reroll_btn.text = _reroll_label()
+	_reroll_btn.disabled = rerolls_used() >= MAX_REROLLS or GameState.coins < reroll_cost()
 
 
 func _row_for(i: int) -> Control:
@@ -195,3 +317,100 @@ func _buy(i: int) -> void:
 	AudioManager.sfx("buy")
 	GameState.toast_msg("Compraste: %s" % o["name"], UIKit.GOOD)
 	_refresh()
+
+
+# ------------------------------------------------------------------ desplazamiento táctil de la lista
+## Arrastrar con el dedo (o el ratón) sobre CUALQUIER parte de la lista la desplaza, con inercia. Un gesto que pasa
+## el umbral es un desplazamiento: se anula la pulsación del botón sobre el que empezó y se ignora su suelta, así que
+## deslizar nunca compra. Comprar exige una pulsación corta sobre «$ N» y, además, la confirmación.
+func _in_list(pos: Vector2) -> bool:
+	return _sc != null and _sc.get_global_rect().has_point(pos) and (_confirm_box == null or not is_instance_valid(_confirm_box))
+
+
+func _input(event: InputEvent) -> void:
+	if _sc == null or not is_visible_in_tree():
+		return
+	var pos := Vector2.ZERO
+	var kind := ""        # "down" | "move" | "up"
+	var rel := 0.0
+	if event is InputEventScreenTouch:
+		pos = event.position
+		kind = "down" if event.pressed else "up"
+	elif event is InputEventScreenDrag:
+		pos = event.position
+		kind = "move"
+		rel = event.relative.y
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			if _drag_moved:
+				get_viewport().set_input_as_handled()      # eco ratón del gesto táctil que ya es un desplazamiento
+				if not event.pressed:
+					_end_drag()
+			return
+		pos = event.position
+		kind = "down" if event.pressed else "up"
+	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			if _drag_moved:
+				get_viewport().set_input_as_handled()
+			return
+		pos = event.position
+		kind = "move"
+		rel = event.relative.y
+	else:
+		return
+	match kind:
+		"down":
+			if _in_list(pos):
+				_drag_active = true
+				_drag_moved = false
+				_drag_start = pos
+				_drag_last = pos
+				_drag_vel = 0.0
+				_inertia = 0.0
+		"move":
+			if not _drag_active:
+				return
+			if not _drag_moved:
+				if absf(pos.y - _drag_start.y) < DRAG_DEADZONE:
+					if event is InputEventScreenDrag:
+						get_viewport().set_input_as_handled()      # el ScrollContainer no debe desplazarse por su cuenta
+					return
+				_drag_moved = true
+				_cancel_press_at(_drag_start)
+			_sc.scroll_vertical -= int(round(pos.y - _drag_last.y))
+			_drag_vel = lerpf(_drag_vel, pos.y - _drag_last.y, 0.5)
+			_drag_last = pos
+			get_viewport().set_input_as_handled()
+		"up":
+			if _drag_active and _drag_moved:
+				get_viewport().set_input_as_handled()
+				_inertia = _drag_vel * 60.0          # px/s
+			_end_drag()
+
+
+## Anula la pulsación a medias del botón que hay bajo el punto donde empezó el gesto (alternar «disabled» reinicia
+## su estado de pulsación sin cambiar su estado final), para que deslizar no lo «dispare» ni lo deje hundido.
+func _cancel_press_at(pos: Vector2) -> void:
+	for b in _list.find_children("*", "Button", true, false):
+		var bt := b as Button
+		if bt.get_global_rect().has_point(pos):
+			var was := bt.disabled
+			bt.disabled = true
+			bt.disabled = was
+
+
+func _end_drag() -> void:
+	_drag_active = false
+	_drag_moved = false
+
+
+func _process(delta: float) -> void:
+	if absf(_inertia) > 20.0 and not _drag_active and _sc != null:
+		var before := _sc.scroll_vertical
+		_sc.scroll_vertical = before - int(round(_inertia * delta))
+		_inertia *= exp(-delta * 4.5)
+		if _sc.scroll_vertical == before:
+			_inertia = 0.0
+	else:
+		_inertia = 0.0

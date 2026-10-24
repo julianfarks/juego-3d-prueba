@@ -111,6 +111,13 @@ func _ready() -> void:
 			cmn.name = "CameraTest"
 			add_child(cmn)
 			cmn.set("main", self)
+	if Config.cmd_flag("--shoptest"):
+		var sht := load("res://tests/shoptest.gd")
+		if sht != null:
+			var shn: Node = sht.new()
+			shn.name = "ShopTest"
+			add_child(shn)
+			shn.set("main", self)
 	if Config.cmd_flag("--navtest"):
 		var nvt := load("res://tests/navtest.gd")
 		if nvt != null:
@@ -558,6 +565,8 @@ func _region_changed(idx: int) -> bool:
 
 
 var _bars: Array = []
+## Estado de la visita actual a la tienda (ofertas + relanzamientos usados). Se reinicia al empezar cada arena.
+var _shop_visit: Dictionary = {}
 var _zoom_tw: Tween
 
 
@@ -649,6 +658,7 @@ func _show_region_banner(idx: int, hold: float) -> void:
 
 func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	_transitioning = true
+	_shop_visit = {}                   # visita nueva a la tienda: ofertas nuevas y relanzamientos a 0
 	var region := _region_changed(idx)
 	var bm := BiomeDB.for_arena(idx)
 	if not instant:
@@ -727,6 +737,7 @@ func _open_cards(min_rarity: int, second: bool) -> void:
 
 func _on_shop() -> void:
 	var sh := ShopUI.new()
+	sh.visit = _shop_visit            # misma visita (arena) = mismas ofertas y mismo contador de relanzamientos
 	sh.closed.connect(func():
 		if arena.phase == Arena.Phase.CLEARED:
 			_autosave("portal" if arena.chest_taken else "reward", true))
