@@ -22,6 +22,10 @@ const PAPER_HIT_CD := 0.6
 
 static var obj_stacks := 0
 static var obj_t := 0.0
+static var round_t := 0.0                         # segundos dentro de la ronda actual (Impulso Procesal)
+static var _bill_t := 0.0
+static var _season_t := 0.0
+static var case_loot_round := 0                   # monedas del Maletín Cobrador cobradas en esta ronda (tope por ronda)
 static var dodge_t := 0.0
 static var dodge_next := false
 static var kills_since_heal := 0
@@ -38,6 +42,10 @@ static var forced_roll := -1.0          # pruebas: fuerza la próxima tirada (0.
 
 
 static func reset() -> void:
+	round_t = 0.0
+	_bill_t = 0.0
+	_season_t = 0.0
+	case_loot_round = 0
 	obj_stacks = 0
 	obj_t = 0.0
 	dodge_t = 0.0
@@ -58,6 +66,8 @@ static func roll() -> float:
 
 
 static func on_round_start() -> void:
+	round_t = 0.0
+	case_loot_round = 0
 	obj_stacks = 0
 	obj_t = 0.0
 	kills_since_heal = 0
@@ -73,11 +83,25 @@ static func damage_mult(enemy: Node3D, opts: Dictionary) -> float:
 		m *= 1.0 + b.s("law_final")
 	if obj_stacks > 0 and b.s("law_obj") > 0.0:
 		m *= 1.0 + float(obj_stacks) * b.s("law_obj")
+	m *= time_mult()
 	if b.s("law_dodge") > 0.0:
 		if dodge_t > 0.0:
 			m *= 1.0 + b.s("law_dodge")
 		if dodge_next and opts.get("proc", true):
 			m *= 1.6 if b.s("syn_law_dodge") > 0.0 else 1.4
+	return m
+
+
+## Daño extra por el paso del tiempo (Antigüedad, Impulso Procesal, Carga de Casos). Todo con tope.
+static func time_mult() -> float:
+	var b: Build = GameState.build
+	var m := 1.0
+	if b.s("law_tenure") > 0.0:
+		m *= 1.0 + minf(GameState.run_time / 60.0, 20.0) * b.s("law_tenure")
+	if b.s("law_momentum") > 0.0:
+		m *= 1.0 + float(mini(int(round_t / 10.0), 10)) * b.s("law_momentum")
+	if b.s("law_caseload") > 0.0:
+		m *= 1.0 + minf(float(GameState.kills / 10) * b.s("law_caseload"), 0.6)
 	return m
 
 
@@ -180,7 +204,32 @@ static func on_player_damaged(lost: float, max_hp: float) -> void:
 
 
 # ------------------------------------------------------------------ por fotograma
+## Maletín Cobrador: monedas por enemigos golpeados al recuperar el maletín. Topes: por recuperación y por ronda.
+static func case_loot_pay(hits: int, per_hit: int, arena_index: int) -> int:
+	if hits <= 0 or per_hit <= 0:
+		return 0
+	var raw := mini(hits * per_hit, 2 + 2 * per_hit)
+	var room := maxi(0, 40 + 6 * arena_index - case_loot_round)
+	var pay := mini(raw, room)
+	case_loot_round += pay
+	return pay
+
+
 static func update(delta: float) -> void:
+	round_t += delta
+	var pl = GameState.player
+	var b: Build = GameState.build
+	var fighting: bool = pl != null and is_instance_valid(pl) and pl.alive and GameState.arena != null and is_instance_valid(GameState.arena) and GameState.arena.phase == Arena.Phase.FIGHT
+	if fighting and b.s("law_bill") > 0.0:
+		_bill_t += delta
+		if _bill_t >= 20.0:
+			_bill_t = 0.0
+			GameState.add_coins(int(b.s("law_bill")) * (1 + GameState.arena_index / 4))
+	if fighting and b.s("law_season") > 0.0:
+		_season_t += delta
+		if _season_t >= 10.0:
+			_season_t = 0.0
+			pl.heal(pl.max_hp * minf(b.s("law_season"), 0.1))
 	if obj_t > 0.0:
 		obj_t -= delta
 		if obj_t <= 0.0:

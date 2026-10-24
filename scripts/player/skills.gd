@@ -242,7 +242,7 @@ func _cast_slam() -> bool:
 	if ct == null or not ct.can_throw():
 		return false                       # el maletín aún no ha vuelto a la mano: no hay lanzamientos infinitos
 	var amult := attack_speed_mult()
-	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0) * (1.0 - minf(GameState.build.s("cd_slam"), 0.5))
+	cd_max[0] = float(Config.SKILLS["slam"]["cd"]) * _wp("cd_x", 1.0) * (1.0 - minf(GameState.build.s("cd_slam"), 0.5)) / (1.0 + minf(GameState.build.s("bc_rate"), 1.2))
 	cd[0] = cd_max[0]  # update() lo descuenta más rápido cuanta más velocidad de ataque haya
 	var dir := aim_dir(float(ct.make_profile()["range"]))
 	player.face_dir(dir, 0.4)

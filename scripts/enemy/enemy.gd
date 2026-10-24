@@ -67,6 +67,15 @@ var _barrage_pts: Array = []
 var _dash_left := 0.0
 var _dash_hit := false
 var _since_hit := 99.0
+var boss_style := ""                # id del bioma del jefe (EnemyDefs.BOSS_STYLES): nombre, color y ataques propios
+var _wave_n := 0                    # repeticiones pendientes del ataque actual (espirales, rayos cruzados, ondas)
+var _wave_k := 1
+var _wave_t := 0.0
+var _wave_dmg := 0.0
+var _leap_t := 0.0                  # salto / teletransporte del jefe en curso
+var _leap_dur := 0.5
+var _leap_from := Vector3.ZERO
+var _leap_to := Vector3.ZERO
 static var chase_us := 0                    # medición de rendimiento (pruebas): microsegundos acumulados en _chase
 static var chase_n := 0
 var _seed := 0.0
@@ -156,6 +165,17 @@ func setup(p_kind: String, p_arena_index: int, p_affix: String, pos: Vector3, p_
 		display_name = "%s %s" % [a["name"], display_name]
 		xp_value *= 1.5
 		coin_value = int(ceil(coin_value * 1.5))
+	boss_style = ""
+	if kind == "boss":
+		boss_style = String(BiomeDB.get_biome(BiomeDB.biome_index(arena_index))["id"])
+		var bst: Dictionary = EnemyDefs.BOSS_STYLES.get(boss_style, EnemyDefs.BOSS_STYLES["urban"])
+		display_name = String(bst["name"])
+		max_hp *= float(bst["hp_x"])
+		move_speed *= float(bst["speed_x"])
+		tint = bst["tint"]
+		vscale = float(bst["scale"])
+	_wave_n = 0
+	_leap_t = 0.0
 	hp = max_hp
 	marked_t = 0.0
 	slow_t = 0.0
@@ -303,6 +323,8 @@ func _physics_process(delta: float) -> void:
 		_cds[k] = maxf(0.0, float(_cds[k]) - delta)
 	_gate = maxf(0.0, _gate - delta)
 	invuln_t = maxf(0.0, invuln_t - delta)
+	if _wave_n > 0 and alive:
+		_wave_tick(delta)
 	var p := _player()
 	match state:
 		S.SPAWN:
@@ -667,7 +689,8 @@ func _unstick_hop(nav: NavGrid) -> void:
 # ------------------------------------------------------------------ ataques
 func _attack_list() -> Array:
 	if kind == "boss":
-		return EnemyDefs.BOSS_PHASES[phase]
+		var bst: Dictionary = EnemyDefs.BOSS_STYLES.get(boss_style, EnemyDefs.BOSS_STYLES["urban"])
+		return (bst["phases"] as Dictionary)[clampi(phase, 1, 3)]
 	return def["attacks"]
 
 
@@ -729,6 +752,19 @@ func _begin_attack(name: String, p: Player) -> void:
 					_tele_items.append(fx.telegraph_circle(bp, float(_atk["radius"]), tele, col))
 			"summon":
 				_tele_items.append(fx.telegraph_circle(pos, float(_atk["radius"]), tele, Color(0.75, 0.3, 1.0)))
+			"leap":
+				var tgt: Vector3 = p.global_position
+				if bool(_atk.get("behind", false)):
+					var away := tgt - global_position
+					away.y = 0.0
+					tgt += (away.normalized() if away.length() > 0.01 else Vector3.BACK) * 3.0
+				var hh := 14.0
+				if GameState.arena != null:
+					hh = float(GameState.arena.half) - 2.5
+				_leap_to = Vector3(clampf(tgt.x, -hh, hh), global_position.y, clampf(tgt.z, -hh, hh))
+				_tele_items.append(fx.telegraph_circle(_leap_to, float(_atk["radius"]), tele, col))
+			"beam":
+				_tele_items.append(fx.telegraph_line(pos, _aim_yaw, float(_atk["length"]), float(_atk["width"]), tele, col))
 	AudioManager.sfx_at("telegraph", global_position, -8.0)
 	var an := String(_atk["anim"])
 	rig.play("windup" if an in ["slam", "swing", "windup"] else an, tele + 0.05)
@@ -755,6 +791,10 @@ func _execute_attack() -> void:
 	_cds[_atk_name] = float(a["cd"]) * randf_range(0.9, 1.15)
 	var shape := String(a["shape"])
 	_t = 0.12
+	_wave_n = int(a.get("waves", 1)) - 1
+	_wave_k = 1
+	_wave_t = float(a.get("wave_gap", 0.3))
+	_wave_dmg = dmg
 	match shape:
 		"cone":
 			if a.has("proj"):
@@ -799,11 +839,24 @@ func _execute_attack() -> void:
 			rig.play("windup", _dash_left)
 			rig.charging = true
 			AudioManager.sfx_at("dodge", global_position, -6.0)
+		"leap":
+			_leap_from = global_position
+			_leap_dur = float(a.get("dur", 0.5))
+			_leap_t = _leap_dur
+			_set_state(S.ACT)
+			rig.play("windup", _leap_dur + 0.1)
+			AudioManager.sfx_at("dodge", global_position, -6.0)
+		"beam":
+			_beam_strike(_aim_dir, dmg, a)
+			if _wave_n > 0:
+				_wave_tele_next()
+			_after_act()
 		"summon":
 			var n := int(a.get("count", 2))
-			var minion := "thief"
+			var minion := String(a.get("minion", "thief"))
 			if kind == "boss":
-				minion = "ranged" if phase >= 2 and randf() < 0.4 else "thief"
+				if not a.has("minion"):
+					minion = "ranged" if phase >= 2 and randf() < 0.4 else "thief"
 				n += phase - 1
 			elif arena_index >= 6 and randf() < 0.4:
 				minion = "runner"
@@ -816,6 +869,21 @@ func _execute_attack() -> void:
 
 
 func _act_tick(delta: float, p: Player) -> void:
+	if _leap_t > 0.0:
+		_leap_t -= delta
+		var k := 1.0 - clampf(_leap_t / _leap_dur, 0.0, 1.0)
+		var pp := _leap_from.lerp(_leap_to, k)
+		pp.y = _leap_from.y + sin(k * PI) * (3.2 if _leap_dur > 0.2 else 0.4)
+		global_position = pp
+		velocity = Vector3.ZERO
+		if _leap_t <= 0.0:
+			global_position = _leap_to
+			var a := _atk
+			if p != null and _flat_to(p).length() <= float(a["radius"]) + 0.4:
+				p.take_damage(dmg_base * float(a["dmg"]), global_position, {"src": "slam", "enemy": self})
+			_fx_impact(global_position, float(a["radius"]), float(a.get("shake", 0.5)))
+			_after_act()
+		return
 	# fase activa: solo las cargas (línea) pasan por aquí
 	if _dash_left > 0.0:
 		_dash_left -= delta
@@ -845,6 +913,74 @@ func _act_tick(delta: float, p: Player) -> void:
 	_move_toward_dir(Vector3.ZERO, 0.0, delta)
 	if _t <= 0.0:
 		_after_act()
+
+
+## Rayo en línea: daña (una vez) si el jugador está dentro del pasillo; efectos a lo largo de la línea.
+func _beam_strike(dir: Vector3, dmg: float, a: Dictionary) -> void:
+	var p := _player()
+	var blen := float(a["length"])
+	var w := float(a["width"])
+	if p != null:
+		var rel := p.global_position - global_position
+		rel.y = 0.0
+		var along := rel.dot(dir)
+		var side := absf(rel.cross(dir).y)
+		if along >= 0.0 and along <= blen and side <= w * 0.5 + 0.4:
+			p.take_damage(dmg, global_position, {"src": "beam", "enemy": self})
+	var fx = GameState.fx
+	if fx != null:
+		var steps := int(blen / 3.0)
+		for i in steps:
+			var q := global_position + dir * (2.0 + 3.0 * float(i)) + Vector3(0, 0.5, 0)
+			fx.burst(q, Color(1.0, 0.45, 0.25), 4, 5.0, 0.14, 0.35)
+		fx.ring(global_position + dir * 2.0, 2.0, Color(1.0, 0.55, 0.25, 0.85), 0.3, 0.3)
+	AudioManager.sfx_at("explosion", global_position, -5.0)
+	if GameState.cam != null:
+		GameState.cam.shake(0.25)
+
+
+func _wave_tele_next() -> void:
+	var fx = GameState.fx
+	if fx == null:
+		return
+	var rot := deg_to_rad(float(_atk.get("wave_rot", 0.0))) * float(_wave_k)
+	_tele_items.append(fx.telegraph_line(global_position, _aim_yaw + rot, float(_atk["length"]), float(_atk["width"]), float(_atk.get("wave_gap", 0.5)), Color(1.0, 0.15, 0.1)))
+
+
+## Repeticiones de un ataque (espiral de proyectiles, rayos cruzados, ondas en cadena).
+func _wave_tick(delta: float) -> void:
+	_wave_t -= delta
+	if _wave_t > 0.0:
+		return
+	var a := _atk
+	var rot := deg_to_rad(float(a.get("wave_rot", 0.0))) * float(_wave_k)
+	_wave_k += 1
+	_wave_n -= 1
+	_wave_t = float(a.get("wave_gap", 0.3))
+	var shape := String(a.get("shape", ""))
+	match shape:
+		"beam":
+			_clear_tele()
+			_beam_strike(_aim_dir.rotated(Vector3.UP, rot), _wave_dmg, a)
+			if _wave_n > 0:
+				_wave_tele_next()
+		"circle", "cone", "aim":
+			if a.has("proj"):
+				var base := _aim_dir
+				var p := _player()
+				if rot == 0.0 and p != null:
+					var to := _flat_to(p)
+					if to.length() > 0.01:
+						_aim_dir = to.normalized()
+				else:
+					_aim_dir = base.rotated(Vector3.UP, rot)
+				_fire_projectiles(_wave_dmg)
+				_aim_dir = base
+			else:
+				var p2 := _player()
+				if p2 != null and _flat_to(p2).length() <= float(a["radius"]) + 0.4:
+					p2.take_damage(_wave_dmg, global_position, {"src": "slam", "enemy": self})
+				_fx_impact(global_position, float(a["radius"]), float(a.get("shake", 0.3)))
 
 
 func _after_act() -> void:
@@ -901,6 +1037,8 @@ func _clear_tele() -> void:
 
 
 func _interrupt() -> void:
+	_wave_n = 0
+	_leap_t = 0.0
 	_clear_tele()
 	_barrage_pts.clear()
 	rig.charging = false

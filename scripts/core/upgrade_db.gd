@@ -49,7 +49,7 @@ const CAPS := {
 	"crit_chance": 0.85, "armor": 0.6, "block": 0.45, "cdr": 0.6, "atk_speed": 1.6,
 	"slow_chance": 0.8, "burn_chance": 0.9, "chain_chance": 0.7, "freeze_chance": 0.3,
 	"mark_chance": 0.7, "dodge_cd": 0.6, "move_speed": 1.0, "shop_discount": 0.5,
-	"aoe_pct": 1.5, "crit_mult": 6.0, "crit_explosion": 5.0,
+	"aoe_pct": 1.5, "law_tenure": 0.2, "law_momentum": 0.2, "law_caseload": 0.06, "law_bill": 6.0, "law_season": 0.06, "bc_rate": 1.2, "bc_ret": 2.0, "bc_ammo": 4.0, "bc_fw": 4.0, "bc_loot": 5.0, "crit_mult": 6.0, "crit_explosion": 5.0,
 	"hp_regen_pct": 0.05, "heal_pow": 1.5, "armor_low": 0.3, "iframe_add": 0.4, "dodge_speed": 1.0, "hurt_iframe_add": 0.4,
 	"shield_regen_pct": 3.0, "shield_delay_cut": 0.6, "jump_pow": 0.6, "lifesteal": 0.12, "cd_docs": 0.6, "cd_seal": 0.6,
 	"cd_barrier": 0.6, "cd_slam": 0.5, "docs_pierce": 6.0, "docs_speed": 1.5, "docs_turn": 12.0, "cost_cut": 0.5,
@@ -417,6 +417,49 @@ static func _pick_weight(d: Dictionary, build: Build, equipped: Array) -> float:
 ## 'min_rarity' garantiza al menos una carta de esa rareza o mayor (cofres de jefe).
 ## Excluye: mejoras en su nivel máximo (50 como mucho), con la estadística principal ya en su límite duro,
 ## y duplicados dentro del mismo cofre. Pondera según el equipamiento y la build.
+## Grupos de mejoras de maletín para el botín del jefe (una carta de cada grupo distinto).
+const BOSS_CASE_GROUPS := {
+	"DAÑO": ["case_dmg", "case_sharp", "case_size", "case_crit", "case_pierce"],
+	"EFECTOS": ["case_blast", "case_shock", "case_corr", "case_pyro", "case_frag", "case_docs", "case_trail", "case_rain"],
+	"ECONOMÍA": ["case_loot"],
+	"CADENCIA": ["case_rate", "case_magazine", "case_fireworks", "case_retspeed", "case_cases", "case_double", "case_multi"],
+}
+
+
+## 3 opciones de maletín del botín del jefe: siempre de 3 grupos DISTINTOS (daño, efectos, economía, cadencia...).
+## Rareza mínima 'min_rarity' (limitada a las que admite cada mejora). Sin mejoras agotadas/al tope.
+static func boss_case_cards(build: Build, depth: int, rng: RandomNumberGenerator, min_rarity := 1, luck := 0.0) -> Array:
+	_ensure()
+	var avail := {}
+	for g in BOSS_CASE_GROUPS.keys():
+		var ids: Array = []
+		for id in BOSS_CASE_GROUPS[g]:
+			var d = get_def(id)
+			if d != null and not d.is_empty() and is_offerable(d, build, depth):
+				ids.append(id)
+		if not ids.is_empty():
+			avail[g] = ids
+	var groups: Array = avail.keys()
+	# barajado determinista con el rng de la partida
+	for i in range(groups.size() - 1, 0, -1):
+		var j := rng.randi() % (i + 1)
+		var t = groups[i]
+		groups[i] = groups[j]
+		groups[j] = t
+	var out: Array = []
+	for g in groups:
+		if out.size() >= 3:
+			break
+		var ids: Array = avail[g]
+		var id: String = ids[rng.randi() % ids.size()]
+		var d: Dictionary = get_def(id)
+		var rs: Array = d["rarities"]
+		var rar := _roll_rarity(luck, depth, rng, min_rarity)
+		rar = clampi(rar, rs[0], rs[rs.size() - 1])
+		out.append({"id": id, "rarity": rar, "group": g})
+	return out
+
+
 static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: RandomNumberGenerator, min_rarity := 0, exclude: Array = []) -> Array:
 	_ensure()
 	var cards: Array = []

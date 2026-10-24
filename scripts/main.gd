@@ -126,6 +126,13 @@ func _ready() -> void:
 			dfn.name = "DiffTest"
 			add_child(dfn)
 			dfn.set("main", self)
+	if Config.cmd_flag("--bosstest"):
+		var bst_t := load("res://tests/bosstest.gd")
+		if bst_t != null:
+			var bsn: Node = bst_t.new()
+			bsn.name = "BossTest"
+			add_child(bsn)
+			bsn.set("main", self)
 	if Config.cmd_flag("--revivetest"):
 		var rvt := load("res://tests/revivetest.gd")
 		if rvt != null:
@@ -807,6 +814,12 @@ func _open_cards(min_rarity: int, second: bool) -> void:
 
 func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 	var cs := CardSelect.new()
+	# botín del jefe: la 1.ª elección es de MALETÍN (3 opciones de grupos distintos: daño, efectos, economía, cadencia)
+	var boss_case := step == 1 and total == 2 and arena != null and arena.kind == Scaling.KIND_BOSS
+	var fixed: Array = []
+	if boss_case:
+		fixed = UpgradeDB.boss_case_cards(GameState.build, GameState.arena_index, GameState.rng, maxi(min_rarity, 1), GameState.build.s("luck"))
+		boss_case = not fixed.is_empty()
 	cs.picked.connect(func(card): taken.append(String(card["id"])))
 	cs.closed.connect(func():
 		if step < total:
@@ -816,7 +829,10 @@ func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 			_autosave("portal" if arena.rewards_done() else "reward"))
 	cs.inventory_requested.connect(func(): _open_inventory_over(cs))
 	_open_overlay(cs)
-	cs.open(GameState.arena_index, min_rarity, "chest", 3, taken, step, total)
+	if boss_case:
+		cs.open_fixed(fixed, "¡BOTÍN DEL JEFE! ELIGE TU MALETÍN", GameState.arena_index)
+	else:
+		cs.open(GameState.arena_index, min_rarity, "chest", 3, taken, step, total)
 
 
 func _on_shop() -> void:

@@ -61,13 +61,47 @@ const ATTACKS := {
 	"barrage": {"shape": "circles", "n": 6, "radius": 2.5, "tele": 1.25, "recover": 0.9, "dmg": 1.3, "anim": "summon", "range": 40.0, "min_range": 0.0, "cd": 6.5},
 	"volley": {"shape": "aim", "tele": 0.9, "recover": 0.9, "dmg": 0.9, "anim": "shoot", "range": 40.0, "min_range": 0.0, "cd": 4.0, "proj": "bolt", "speed": 12.0, "count": 3, "spread": 28.0},
 	"radial": {"shape": "circle", "radius": 3.0, "tele": 0.85, "recover": 1.0, "dmg": 0.8, "anim": "roar", "range": 40.0, "min_range": 0.0, "cd": 6.0, "proj": "bolt", "speed": 9.0, "count": 14, "spread": 360.0},
+	# --- ataques nuevos de jefes (v0.12) ---
+	"coin_rain": {"shape": "circles", "n": 9, "radius": 2.2, "tele": 1.4, "recover": 1.0, "dmg": 1.2, "anim": "summon", "range": 40.0, "min_range": 0.0, "cd": 7.0},
+	"sand_pillars": {"shape": "circles", "n": 5, "radius": 3.3, "tele": 1.7, "recover": 1.1, "dmg": 1.4, "anim": "summon", "range": 40.0, "min_range": 0.0, "cd": 7.5},
+	"spiral": {"shape": "circle", "radius": 2.4, "tele": 0.8, "recover": 1.3, "dmg": 0.7, "anim": "roar", "range": 40.0, "min_range": 0.0, "cd": 8.5, "proj": "bolt", "speed": 8.5, "count": 5, "spread": 360.0, "waves": 7, "wave_gap": 0.18, "wave_rot": 24.0},
+	"ring_chain": {"shape": "circle", "radius": 5.6, "tele": 1.0, "recover": 1.1, "dmg": 1.0, "anim": "roar", "range": 10.0, "min_range": 0.0, "cd": 7.0, "shake": 0.5, "waves": 3, "wave_gap": 0.55},
+	"rocket_volley": {"shape": "aim", "tele": 0.85, "recover": 1.0, "dmg": 0.8, "anim": "shoot", "range": 40.0, "min_range": 0.0, "cd": 5.5, "proj": "bolt", "speed": 11.0, "count": 7, "spread": 70.0, "waves": 2, "wave_gap": 0.45},
+	"vine_sweep": {"shape": "cone", "radius": 9.0, "angle": 160.0, "tele": 0.95, "recover": 1.0, "dmg": 1.3, "anim": "slam", "range": 9.0, "min_range": 0.0, "cd": 5.0, "shake": 0.4},
+	"summon_runners": {"shape": "summon", "radius": 3.2, "tele": 1.0, "recover": 0.9, "dmg": 0.0, "anim": "summon", "range": 40.0, "min_range": 0.0, "cd": 10.0, "count": 3, "minion": "runner"},
+	"gavel_leap": {"shape": "leap", "radius": 4.2, "tele": 1.0, "recover": 1.0, "dmg": 1.5, "anim": "windup", "range": 30.0, "min_range": 5.0, "cd": 6.0, "dur": 0.5, "shake": 0.7},
+	"blink_strike": {"shape": "leap", "radius": 3.4, "tele": 0.7, "recover": 0.8, "dmg": 1.2, "anim": "windup", "range": 40.0, "min_range": 3.0, "cd": 5.0, "dur": 0.12, "behind": true, "shake": 0.4},
+	"verdict_beam": {"shape": "beam", "length": 22.0, "width": 2.4, "tele": 1.1, "recover": 1.0, "dmg": 1.5, "anim": "shoot", "range": 40.0, "min_range": 2.0, "cd": 6.5},
+	"cross_beam": {"shape": "beam", "length": 22.0, "width": 2.2, "tele": 1.25, "recover": 1.1, "dmg": 1.4, "anim": "shoot", "range": 40.0, "min_range": 2.0, "cd": 8.0, "waves": 3, "wave_gap": 0.5, "wave_rot": 60.0},
 }
 
-# Ataques del jefe por fase
+# Ataques del jefe por fase (jefe genérico/urbano; los demás jefes usan BOSS_STYLES)
 const BOSS_PHASES := {
 	1: ["ground_slam", "volley", "summon"],
 	2: ["ground_slam", "volley", "charge", "barrage", "summon"],
 	3: ["ground_slam", "charge", "barrage", "ring_blast", "radial", "volley"],
+}
+
+## Un jefe por región (el bioma decide cuál): nombre, color, escala y ataques propios en cada fase.
+const BOSS_STYLES := {
+	"urban": {"name": "Don Capital, el Banquero Corrupto", "tint": Color(1, 1, 1), "scale": 2.3, "hp_x": 1.0, "speed_x": 1.0,
+		"phases": {1: ["ground_slam", "volley", "summon", "coin_rain"], 2: ["ground_slam", "volley", "charge", "barrage", "summon", "coin_rain"],
+			3: ["ground_slam", "charge", "barrage", "ring_blast", "radial", "volley", "coin_rain", "spiral"]}},
+	"forest": {"name": "Doña Hiedra, la Notaria Venenosa", "tint": Color(0.7, 1.0, 0.7), "scale": 2.2, "hp_x": 0.95, "speed_x": 1.1,
+		"phases": {1: ["vine_sweep", "volley", "summon_runners"], 2: ["vine_sweep", "spiral", "barrage", "summon_runners", "volley"],
+			3: ["vine_sweep", "spiral", "cross_beam", "barrage", "radial", "summon_runners"]}},
+	"industrial": {"name": "Capataz Mayor Acero", "tint": Color(1.0, 0.75, 0.55), "scale": 2.5, "hp_x": 1.15, "speed_x": 0.95,
+		"phases": {1: ["ground_slam", "charge", "rocket_volley"], 2: ["ground_slam", "charge", "gavel_leap", "rocket_volley", "ring_chain"],
+			3: ["gavel_leap", "charge", "ring_chain", "rocket_volley", "barrage", "radial"]}},
+	"desert": {"name": "El Escribano Faraón", "tint": Color(1.0, 0.92, 0.55), "scale": 2.3, "hp_x": 1.0, "speed_x": 1.0,
+		"phases": {1: ["verdict_beam", "sand_pillars", "summon"], 2: ["verdict_beam", "sand_pillars", "blink_strike", "volley"],
+			3: ["cross_beam", "sand_pillars", "blink_strike", "spiral", "summon_runners"]}},
+	"citadel": {"name": "El Fiscal Supremo del Cielo", "tint": Color(0.7, 0.85, 1.0), "scale": 2.2, "hp_x": 0.95, "speed_x": 1.15,
+		"phases": {1: ["blink_strike", "volley", "rocket_volley"], 2: ["blink_strike", "spiral", "verdict_beam", "rocket_volley"],
+			3: ["blink_strike", "cross_beam", "spiral", "ring_chain", "radial"]}},
+	"court": {"name": "El Juez Supremo, Verdugo de la Sala", "tint": Color(1.0, 0.65, 0.75), "scale": 2.6, "hp_x": 1.25, "speed_x": 1.0,
+		"phases": {1: ["gavel_leap", "verdict_beam", "summon"], 2: ["gavel_leap", "cross_beam", "ring_chain", "barrage", "summon"],
+			3: ["gavel_leap", "cross_beam", "spiral", "ring_chain", "coin_rain", "radial", "blink_strike"]}},
 }
 
 ## Afijos (variantes peligrosas de enemigos normales)

@@ -14,6 +14,8 @@ const LABELS := {
 	"bc_docs": "Documentos por impacto", "bc_rain": "Prob. de lluvia", "bc_rain_n": "Documentos de lluvia", "bc_shock": "Prob. eléctrica",
 	"bc_shock_n": "Saltos eléctricos", "bc_corr": "Prob. de corrosión", "bc_spread": "Propagación de estados", "bc_trail": "Daño del rastro",
 	"bc_multi": "Minimaletines en vuelo", "bc_return": "Explosión de retorno", "bc_return_r": "Radio de retorno", "bc_catch": "Prisa al atrapar",
+	"bc_fw": "Fuegos artificiales por tiro", "bc_rate": "Cadencia de lanzamiento", "bc_ret": "Velocidad de retorno",
+	"bc_ammo": "Maletines de reserva", "bc_loot": "Monedas por maletín recuperado",
 	"bc_cases": "Maletines extra", "bc_double": "Doble maletín", "bc_crit": "Crítico contractual",
 }
 
@@ -27,6 +29,11 @@ static func register() -> void:
 	UpgradeDB.add_def("case_homing", "Maletín Teledirigido", "case", "target", "La ida del maletín se curva hacia los enemigos cercanos ({v} de guiado)", {"bc_homing": 0.15}, "p", 6, ["maletin", "lanzamiento"])
 	UpgradeDB.add_def("case_sharp", "Esquinas Afiladas", "case", "blade", "El maletín también golpea en el REGRESO (50% del daño de ida, +{v} por nivel)", {"bc_sharp": 0.15}, "p", 6, ["maletin", "lanzamiento"])
 	UpgradeDB.add_def("case_catch", "Atrapar al Vuelo", "case", "wind", "Al recuperar el maletín: +{v} de velocidad de ataque 2.5 s", {"bc_catch": 0.1}, "p", 6, ["maletin", "ataque"])
+	UpgradeDB.add_def("case_fireworks", "Salva de Fuegos Artificiales", "case", "burst", "Cada lanzamiento del maletín dispara {v} cohete(s) de fuegos artificiales", {"bc_fw": 1}, "i", 4, ["maletin", "lanzamiento"])
+	UpgradeDB.add_def("case_rate", "Cadencia de Despacho", "case", "fast", "Puedes lanzar el maletín +{v} más a menudo", {"bc_rate": 0.15}, "p", 8, ["maletin", "ataque"])
+	UpgradeDB.add_def("case_retspeed", "Retorno Express", "case", "wind", "El maletín vuelve +{v} más rápido a tu mano", {"bc_ret": 0.25}, "p", 6, ["maletin", "lanzamiento"])
+	UpgradeDB.add_def("case_magazine", "Cargador de Maletines", "case", "mega", "Guardas {v} maletín(es) de reserva: lanzas en ráfaga como un subfusil sin esperar a que vuelvan", {"bc_ammo": 1}, "i", 4, ["maletin", "ataque"])
+	UpgradeDB.add_def("case_loot", "Maletín Cobrador", "case", "coin", "Al recuperar el maletín cobras {v} moneda(s) por enemigo golpeado (con tope por ronda)", {"bc_loot": 1}, "i", 5, ["maletin", "economia"])
 	UpgradeDB.add_def("case_crit", "Crítico Contractual", "crit", "eye", "Los impactos del maletín (y sus derivados) tienen +{v} de prob. de crítico", {"bc_crit": 0.04}, "p", 15, ["maletin", "critico"])
 	# ---------------------------------------------------------------- trayectoria
 	UpgradeDB.add_def("case_pierce", "Perforación Documental", "case", "page", "El maletín atraviesa a {v} enemigo(s) más y sigue su camino", {"bc_pierce": 1.0}, "i", 6, ["maletin", "lanzamiento"], {"flat": true})

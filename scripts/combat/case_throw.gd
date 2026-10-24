@@ -104,9 +104,22 @@ func in_flight() -> bool:
 	return not cases.is_empty() or _pending_launch or not _queued.is_empty()
 
 
+## Maletines de reserva (Cargador): lanzamientos extra posibles mientras otros siguen fuera, como un subfusil.
+var ammo := 0
+
+
+func ammo_max() -> int:
+	return int(GameState.build.s("bc_ammo"))
+
+
 func can_throw() -> bool:
 	var p = GameState.player
-	return p != null and is_instance_valid(p) and p.alive and not in_flight()
+	if p == null or not is_instance_valid(p) or not p.alive:
+		return false
+	if not in_flight():
+		return true
+	# con maletines fuera: solo si queda reserva, no hay un lanzamiento a medias y no se supera el límite de maletines
+	return ammo > 0 and not _pending_launch and cases.size() + _queued.size() <= MAX_CASES - 2
 
 
 func _hand() -> Node3D:
@@ -157,6 +170,9 @@ func make_profile() -> Dictionary:
 	p["ret_demo"] = syn_case                                   # Doble Sentencia: el bonus de ida también cuenta al volver
 	p["blast"] = b.s("bc_blast")
 	p["blast_r"] = b.s("bc_blast_r")
+	p["fw"] = int(b.s("bc_fw"))                                # Salva de Fuegos Artificiales: cohetes con cada lanzamiento
+	p["ret_speed"] = b.s("bc_ret")                             # Retorno Express
+	p["loot"] = int(b.s("bc_loot"))                            # Maletín Cobrador
 	p["pyro"] = b.s("bc_pyro")
 	p["pyro_n"] = int(b.s("bc_pyro_n"))
 	p["frag"] = b.s("bc_frag")
@@ -221,8 +237,12 @@ func throw_case(dir: Vector3, mega := false) -> bool:
 		td.y = 0.0
 		tdist = clampf(td.length(), 2.0, float(p["range"]))
 	_set_hand_visible(false)
+	if not cases.is_empty() or not _queued.is_empty():
+		ammo = maxi(0, ammo - 1)                       # lanzamiento con maletines aún fuera: gasta un maletín de reserva
 	counts["throws"] += 1
 	LawPerks.on_throw()
+	if int(p["fw"]) > 0:
+		_launch_rockets(origin, null, float(p["base"]), p, int(p["fw"]))      # fuegos artificiales que salen con tu tiro
 	for i in plan.size():
 		var spec: Dictionary = plan[i]
 		var delay: float = spec["delay"]
@@ -302,6 +322,8 @@ func mark_pending(v: bool) -> void:
 
 # ============================================================================ bucle
 func _physics_process(delta: float) -> void:
+	if cases.is_empty() and _queued.is_empty() and not _pending_launch:
+		ammo = ammo_max()                              # sin maletines fuera: la reserva vuelve a estar completa
 	if _pending_launch:
 		_pending_t -= delta
 		if _pending_t <= 0.0:
@@ -379,7 +401,8 @@ func _step_case(c: C, delta: float, space: PhysicsDirectSpaceState3D) -> bool:
 			var ang2 := c.heading.signed_angle_to(to.normalized(), Vector3.UP)
 			var max_turn := (6.0 + 10.0 * c.t) * delta if c.life < 4.5 else 3.0
 			c.heading = c.heading.rotated(Vector3.UP, clampf(ang2, -max_turn, max_turn))
-			c.speed_cur = move_toward(c.speed_cur, c.speed * 1.2, 45.0 * delta)
+			var rsx := 1.0 + float(c.prof.get("ret_speed", 0.0))
+			c.speed_cur = move_toward(c.speed_cur, c.speed * 1.2 * rsx, 45.0 * delta * rsx)
 			c.vel = c.heading * c.speed_cur
 			c.pos.y = move_toward(c.pos.y, hand.y, 3.0 * delta)
 	if c.life > 5.5 and c.state != "ret":
@@ -493,6 +516,13 @@ func _catch(c: C) -> void:
 	AudioManager.combat_sfx("catch", hand, -4.0, AudioManager.P_ELEM, 1.0, 0.05)
 	if GameState.fx != null:
 		GameState.fx.burst(hand, Color(1.0, 0.9, 0.55), 6, 3.5, 0.1, 0.25)
+	ammo = mini(ammo + 1, ammo_max())                       # cada maletín recuperado recarga uno de la reserva
+	if player != null and is_instance_valid(player) and player.alive and int(c.prof.get("loot", 0)) > 0:
+		var pay := LawPerks.case_loot_pay(c.hits.size(), int(c.prof["loot"]), GameState.arena_index)
+		if pay > 0:
+			GameState.add_coins(pay)
+			if GameState.fx != null:
+				GameState.fx.damage_number(player.global_position + Vector3(0, 2.6, 0), "+%d $" % pay, Color(1.0, 0.85, 0.3), 0.9)
 	if player == null or not is_instance_valid(player) or not player.alive or not c.main:
 		return                           # los efectos de retorno se activan UNA vez por lanzamiento (maletín principal)
 	var p: Dictionary = c.prof

@@ -74,6 +74,18 @@ func open(depth: int, p_min_rarity := 0, p_source := "chest", count := 3, p_excl
 	_roll(count + int(GameState.build.s("chest_cards")))
 
 
+## Botín del jefe: 3 opciones de maletín fijas (de grupos distintos), sin tirada propia.
+func open_fixed(cards: Array, title: String, p_depth := 0) -> void:
+	_depth = p_depth
+	source = "boss_case"
+	_title.text = title
+	_cards = cards
+	_selected = -1
+	_rebuild()
+	_update_buttons()
+	AudioManager.sfx("card_flip")
+
+
 func _roll(count: int) -> void:
 	var b: Build = GameState.build
 	_cards = UpgradeDB.roll_cards(count, b.s("luck"), _depth, b, GameState.rng, min_rarity, _exclude)
@@ -104,6 +116,8 @@ func _rebuild() -> void:
 		v.add_theme_constant_override("separation", 8)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		pc.add_child(v)
+		if card.has("group"):
+			v.add_child(UIKit.label("◆ %s ◆" % String(card["group"]), 22, ccol, HORIZONTAL_ALIGNMENT_CENTER))
 		var rl := UIKit.label(String(UpgradeDB.RARITY_NAMES[rar]).to_upper(), 20, rcol, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(rl)
 		var ic := IconView.new().setup(String(d["icon"]), ccol, 110.0)
