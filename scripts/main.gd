@@ -111,6 +111,14 @@ func _ready() -> void:
 			cmn.name = "CameraTest"
 			add_child(cmn)
 			cmn.set("main", self)
+	if Config.cmd_flag("--trailer"):
+		# rodaje del tráiler (carpeta trailer/): no afecta al juego normal
+		var trd := load("res://trailer/trailer_director.gd")
+		if trd != null:
+			var trn: Node = trd.new()
+			trn.name = "TrailerDirector"
+			add_child(trn)
+			trn.set("main", self)
 	if Config.cmd_flag("--endtest"):
 		var ent := load("res://tests/endtest.gd")
 		if ent != null:
