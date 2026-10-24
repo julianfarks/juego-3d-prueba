@@ -793,6 +793,11 @@ func _start_reward(min_rarity: int, boss: bool) -> void:
 	_reward_pick(min_rarity, 1, total, [])
 
 
+## Compatibilidad (pruebas y herramientas): abre las cartas de un cofre; 'second' = dos elecciones.
+func _open_cards(min_rarity: int, second: bool) -> void:
+	_reward_pick(min_rarity, 1, 2 if second else 1, [])
+
+
 func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 	var cs := CardSelect.new()
 	cs.picked.connect(func(card): taken.append(String(card["id"])))

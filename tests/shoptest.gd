@@ -325,6 +325,7 @@ func _reroll_tests() -> void:
 	var cc: int = GameState.coins
 	var heal_i := 0
 	var price := sh3.price_of(float(sh3._offers[heal_i]["base"]))
+	sh3._lock_until = 0
 	sh3._buy(heal_i)
 	ok(cc - GameState.coins == price, "R17 las compras normales siguen cobrando su precio (%d $)" % price)
 	# Segunda Opinión no se vuelve a ofrecer disponible tras relanzar
@@ -332,8 +333,10 @@ func _reroll_tests() -> void:
 	for i in sh3._offers.size():
 		if sh3._offers[i]["type"] == "revive":
 			rev_i = i
+	sh3._lock_until = 0
 	sh3._buy(rev_i)
 	ok(sh3._offers[rev_i]["sold"], "R18 «Segunda Opinión» queda vendida")
+	sh3._lock_until = 0
 	sh3.do_reroll()
 	var rev_sold := false
 	for o in sh3._offers:
@@ -346,7 +349,7 @@ func _reroll_tests() -> void:
 # ============================================================================ cofres
 func _chest_tests() -> void:
 	GameState.coins = 500
-	main._open_cards(0, false)
+	main._reward_pick(0, 1, 1, [])
 	await _secs(0.8)
 	var cs := _overlay_of(CardSelect) as CardSelect
 	ok(cs != null and cs._cards.size() >= 1, "C0 el cofre abre sus cartas")
@@ -369,7 +372,7 @@ func _chest_tests() -> void:
 	await _secs(0.5)
 	ok(GameState.build.picks.size() == picks0 + 1 and _overlay_of(CardSelect) == null, "C5 elegir una carta la añade y cierra el cofre")
 	# descartar da monedas
-	main._open_cards(0, false)
+	main._reward_pick(0, 1, 1, [])
 	await _secs(0.8)
 	var cs2 := _overlay_of(CardSelect) as CardSelect
 	var co: int = GameState.coins
