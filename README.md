@@ -36,6 +36,11 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.10.3 — pantalla de derrota/victoria adaptable
+- `EndScreen` rehecha con contenedores reales: el panel se ajusta al área visible (márgenes proporcionales, ancho máx. 1040, recolocado si cambia la ventana); título, honorarios y botones fijos; estadísticas (2 columnas de pares) y la lista completa de mejoras con su nivel (2 columnas, varias líneas) en una zona desplazable con el dedo o con el stick derecho. Botones en `HFlowContainer` (pasan a otra fila si no caben), ≥64 px de alto.
+- Victoria: «CONTINUAR EN MODO INFINITO» y «RECLAMAR VICTORIA». Derrota: «Reintentar», «VOLVER AL VESTÍBULO» y «AJUSTES». Ya no existe «Menú principal».
+- Prueba: `--endtest` (5 resoluciones horizontales × derrota/victoria, 30 mejoras, toque real y mando).
+
 ## Novedades 0.10.2 — la tienda ya no se atraviesa
 - El modelo de la tienda era solo visual (sin colliders). Ahora cada una de las 6 variantes (furgoneta, cabaña, contenedor, carpa, pabellón, despacho) lleva un `StaticBody3D` «ShopCollider» (capas mundo + cámara) ajustado a su geometría: cuerpo, cabina, mostrador, columnas, plataforma. El frente del mostrador queda libre.
 - La zona de atención es independiente de la colisión: `Interactable.anchor` / `use_point()` la sitúa delante del mostrador (radio 2,6 m). «TIENDA» solo se ofrece ahí, no desde dentro, los lados ni por detrás. Abrir o cerrar la interfaz no toca los colliders.

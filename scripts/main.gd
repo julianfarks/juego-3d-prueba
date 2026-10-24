@@ -111,6 +111,13 @@ func _ready() -> void:
 			cmn.name = "CameraTest"
 			add_child(cmn)
 			cmn.set("main", self)
+	if Config.cmd_flag("--endtest"):
+		var ent := load("res://tests/endtest.gd")
+		if ent != null:
+			var enn: Node = ent.new()
+			enn.name = "EndTest"
+			add_child(enn)
+			enn.set("main", self)
 	if Config.cmd_flag("--shopcoltest"):
 		var sct := load("res://tests/shopcoltest.gd")
 		if sct != null:
