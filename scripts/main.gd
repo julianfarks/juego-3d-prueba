@@ -126,6 +126,13 @@ func _ready() -> void:
 			dfn.name = "DiffTest"
 			add_child(dfn)
 			dfn.set("main", self)
+	if Config.cmd_flag("--revivetest"):
+		var rvt := load("res://tests/revivetest.gd")
+		if rvt != null:
+			var rvn: Node = rvt.new()
+			rvn.name = "ReviveTest"
+			add_child(rvn)
+			rvn.set("main", self)
 	if Config.cmd_flag("--lawtest"):
 		var lwt := load("res://tests/lawtest.gd")
 		if lwt != null:
@@ -857,12 +864,18 @@ func _end_run(victory: bool, can_continue: bool) -> void:
 	touch.release_all()
 	get_tree().paused = true
 	var es := EndScreen.new()
-	es.show_summary(sm, can_continue)
+	es.show_summary(sm, can_continue, {} if victory else {"left": GameState.ad_revives_left(), "max": GameState.MAX_AD_REVIVES})
+	if not victory:
+		_defeat_sm = sm
+		_defeat_es = es
+		es.revive_pressed.connect(_on_revive_pressed)
 	es.retry_pressed.connect(func():
+		_clear_defeat()
 		es.queue_free()
 		_restart_from_end())
 	es.settings_pressed.connect(func(): _open_settings("game"))
 	es.lobby_pressed.connect(func():
+		_clear_defeat()
 		es.queue_free()
 		get_tree().paused = false
 		_enter_lobby())
@@ -876,6 +889,72 @@ func _end_run(victory: bool, can_continue: bool) -> void:
 		AudioManager.sfx("victory")
 	else:
 		AudioManager.sfx("defeat")
+
+
+# ------------------------------------------------------------------ reanimación con anuncio recompensado
+var _defeat_sm: Dictionary = {}
+var _defeat_es: EndScreen
+var _revive_busy := false
+var _death_seq := 0
+
+
+## Botón «REVIVIR — VER ANUNCIO DE 30 S». La oportunidad solo se consume si el servicio de anuncios confirma COMPLETED.
+func _on_revive_pressed() -> void:
+	if _revive_busy or _defeat_es == null or _defeat_sm.is_empty() or GameState.ad_revives_left() <= 0:
+		return
+	_revive_busy = true
+	var es := _defeat_es
+	var seq := _death_seq
+	es.set_revive_busy(true)
+	es.set_revive_message("")
+	var r: int = await RewardedAdService.show_rewarded(RewardedAdService.PLACEMENT_REVIVE, _ov_root())
+	_revive_busy = false
+	if seq != _death_seq or _defeat_es != es or not is_instance_valid(es):
+		return                                      # la pantalla de derrota ya no es la misma: no se concede nada
+	if r == RewardedAdService.Result.COMPLETED:
+		_do_revive()
+		return
+	es.set_revive_busy(false)
+	match r:
+		RewardedAdService.Result.CANCELLED:
+			es.set_revive_message("Anuncio cancelado. No se ha consumido ninguna reanimación.")
+		RewardedAdService.Result.UNAVAILABLE:
+			es.set_revive_message("Anuncio no disponible. Inténtalo más tarde.")
+		_:
+			es.set_revive_message("Error al cargar o reproducir el anuncio. No se ha consumido ninguna reanimación.")
+
+
+func _clear_defeat() -> void:
+	_defeat_sm = {}
+	_defeat_es = null
+	_death_seq += 1
+
+
+func _do_revive() -> void:
+	if _defeat_sm.is_empty() or GameState.player == null:
+		return
+	if not GameState.consume_ad_revive():
+		return
+	var sm := _defeat_sm
+	_defeat_sm = {}                                 # un solo uso por muerte (eventos duplicados no reaniman dos veces)
+	var es := _defeat_es
+	_defeat_es = null
+	_death_seq += 1
+	GameState.resume_after_defeat(sm)
+	if is_instance_valid(es):
+		es.queue_free()
+	_overlays.erase(es)
+	state = St.RUN
+	_end_pending = false
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	player.revive_from_defeat(0.5, 3.0)
+	AudioManager.play_music("combat")
+	GameState.toast_msg("¡REANIMADO! Quedan %d/%d reanimaciones" % [GameState.ad_revives_left(), GameState.MAX_AD_REVIVES], Color(0.5, 0.9, 1.0))
+	var stage := "fight"
+	if arena != null and arena.phase == Arena.Phase.CLEARED:
+		stage = "portal" if arena.rewards_done() else "reward"
+	_autosave(stage, true)
 
 
 func _restart_from_end() -> void:

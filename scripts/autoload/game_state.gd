@@ -111,7 +111,37 @@ func _reset_flush() -> void:
 	_fees_paid = 0
 
 
+## Reanimaciones por anuncio recompensado (máx. 2 por partida). Viven aquí, no en la escena: pausar, reiniciar la escena
+## o pulsar repetidamente no las restablece; se guardan con la partida y solo una partida NUEVA las reinicia.
+const MAX_AD_REVIVES := 2
+var ad_revives_used := 0
+
+
+func ad_revives_left() -> int:
+	return maxi(0, MAX_AD_REVIVES - ad_revives_used)
+
+
+## Consume UNA reanimación. Devuelve false (sin consumir nada) si ya no quedan.
+func consume_ad_revive() -> bool:
+	if ad_revives_used >= MAX_AD_REVIVES:
+		return false
+	ad_revives_used += 1
+	return true
+
+
+## Revierte lo que end_run() hizo al morir (muerte contabilizada, honorarios cobrados) cuando el jugador reanima.
+func resume_after_defeat(sm: Dictionary) -> void:
+	in_run = true
+	var fees := int(sm.get("fees", 0))
+	_fees_paid = maxi(0, _fees_paid - fees)
+	var d := SaveSystem.data
+	d["meta"]["fees"] = maxi(0, int(d["meta"]["fees"]) - fees)
+	d["stats"]["deaths"] = maxi(0, int(d["stats"]["deaths"]) - 1)
+	SaveSystem.save_now()
+
+
 func start_run() -> void:
+	ad_revives_used = 0
 	LawPerks.reset()
 	if player != null:
 		player.skills.practice = false
@@ -174,7 +204,7 @@ func snapshot_run(stage: String) -> Dictionary:
 		"difficulty": difficulty_id,
 		"loadout": loadout.duplicate(),
 		"coins": coins, "kills": kills, "xp": xp, "level": level, "run_time": run_time,
-		"hp": hp, "shield": sh, "revives_left": rv,
+		"hp": hp, "shield": sh, "revives_left": rv, "ad_revives": ad_revives_used,
 		"player_pos": [pos.x, pos.y, pos.z],
 		"picks": build.picks.duplicate(true),
 		"run_stats": run_stats.duplicate(true),
@@ -188,6 +218,7 @@ func snapshot_run(stage: String) -> Dictionary:
 
 ## Restaura una partida guardada (ya validada por SaveSystem). No cuenta como partida nueva.
 func restore_run(r: Dictionary) -> void:
+	ad_revives_used = clampi(int(r.get("ad_revives", 0)), 0, MAX_AD_REVIVES)
 	LawPerks.reset()
 	if player != null:
 		player.skills.practice = false

@@ -407,7 +407,28 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 		_die()
 
 
+## Reanimación tras la derrota (anuncio recompensado ya confirmado): vuelve con 'frac' de la vida máxima y unos segundos
+## de invulnerabilidad. Idempotente: si ya está vivo no hace nada (un evento de muerte duplicado no puede reanimar dos veces).
+func revive_from_defeat(frac := 0.5, invuln := 3.0) -> bool:
+	if alive:
+		return false
+	alive = true
+	hp = clampf(max_hp * frac, 1.0, max_hp)
+	iframes = maxf(iframes, invuln)
+	hurt_iframes = 0.0
+	velocity = Vector3.ZERO
+	_stun_t = 0.0
+	rig.revive()
+	emit_hp()
+	AudioManager.sfx("levelup")
+	if GameState.fx != null:
+		GameState.fx.ring(global_position, 7.0, Color(0.5, 0.9, 1.0, 0.9), 0.6, 0.5)
+	return true
+
+
 func _die() -> void:
+	if not alive:
+		return
 	if revives_left > 0:
 		revives_left -= 1
 		hp = max_hp * 0.4
