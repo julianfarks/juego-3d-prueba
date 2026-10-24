@@ -239,7 +239,7 @@ func _t2_return_and_rethrow() -> void:
 	ok(not second, "T2.2 no se puede lanzar mientras el maletín está fuera (sin lanzamientos infinitos)")
 	var n_alive := 0
 	for ch in ct.get_children():
-		if ch is Node3D and (ch as Node3D).visible:
+		if ch is Node3D and (ch as Node3D).visible and ch != ct.mods:
 			n_alive += 1
 	ok(n_alive <= 1 + ct.secondaries.size() and ct.cases.size() == 1, "T2.3 un solo maletín en el aire (sin duplicados)")
 	var took := await _wait_idle()

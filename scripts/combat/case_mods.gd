@@ -417,7 +417,8 @@ func case_tick(c, delta: float) -> void:
 		mod["files"] = float(mod.get("files", 0.15)) + delta
 		if float(mod["files"]) >= 0.28:
 			mod["files"] = 0.0
-			_drop_files(c.pos, int(p["m_files"]), base * 0.36 * float(p["m_x_f"]), p)
+			var hd: Vector3 = c.heading
+			_drop_files(c.pos, int(p["m_files"]), base * 0.36 * float(p["m_x_f"]), p, Vector3(hd.x, 0, hd.z).normalized() * 2.5)       # caen delante: zona por la que va a pasar
 
 
 func _ray_pulse(from: Vector3, n: int, reach: float, dmg: float, p: Dictionary, chain_ok: bool) -> int:
@@ -444,7 +445,8 @@ func _ray_pulse(from: Vector3, n: int, reach: float, dmg: float, p: Dictionary, 
 	return got
 
 
-func _drop_files(center: Vector3, n: int, dmg: float, p: Dictionary) -> void:
+func _drop_files(center: Vector3, n: int, dmg: float, p: Dictionary, ahead := Vector3.ZERO) -> void:
+	center += ahead
 	n = _budget(_extra(p, n, 6))
 	for i in n:
 		var a := randf() * TAU
@@ -456,7 +458,7 @@ func _drop_files(center: Vector3, n: int, dmg: float, p: Dictionary) -> void:
 		s.vel = Vector3(0, -24.0, 0)
 		s.life = 1.2
 		s.dmg = dmg
-		s.splash = 1.5
+		s.splash = 1.8
 		s.prof = p
 		counts["files"] += 1
 		_place(s)

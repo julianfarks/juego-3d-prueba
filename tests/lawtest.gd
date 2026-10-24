@@ -388,13 +388,17 @@ func _t_reward() -> void:
 	await _complete_round()
 	LawPerks.forced_roll = 0.1
 	var n2 := b.picks.size()
+	var cards2: int = int(GameState.run_stats["cards"])
 	ar._open_chest(2)
 	await _secs(1.0)
-	await _pick_current()
+	await _pick_current()          # botín ESPECIAL del jefe (3 categorías; da +1 nivel de regalo)
 	await _secs(0.4)
-	await _pick_current()
+	await _pick_current()          # 1.ª elección normal
+	await _secs(0.4)
+	await _pick_current()          # 2.ª elección normal
 	await _secs(0.6)
-	ok(_overlay_of(CardSelect) == null and b.picks.size() == n2 + 2, "R6 cofre de jefe + doble no se acumula: 2 elecciones (+%d)" % (b.picks.size() - n2))
+	var dcards: int = int(GameState.run_stats["cards"]) - cards2
+	ok(_overlay_of(CardSelect) == null and dcards == 3 and b.picks.size() <= n2 + 4, "R6 cofre de jefe + doble no se acumula: 1 especial + 2 normales = 3 elecciones (%d; mejoras +%d)" % [dcards, b.picks.size() - n2])
 	# 4) cofre extra + cofre doble a la vez: cada cofre aplica sus propias reglas
 	await _enter_round(0)
 	LawPerks.forced_roll = 0.1

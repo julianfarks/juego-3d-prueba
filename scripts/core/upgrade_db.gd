@@ -49,7 +49,7 @@ const CAPS := {
 	"crit_chance": 0.85, "armor": 0.6, "block": 0.45, "cdr": 0.6, "atk_speed": 1.6,
 	"slow_chance": 0.8, "burn_chance": 0.9, "chain_chance": 0.7, "freeze_chance": 0.3,
 	"mark_chance": 0.7, "dodge_cd": 0.6, "move_speed": 1.0, "shop_discount": 0.5,
-	"aoe_pct": 1.5, "bc_sec_range": 1.2, "bc_xtra": 0.9, "bc_both": 1.0, "bc_split": 0.9, "bc_seek": 1.0, "bc_knife_n": 4.0, "bc_missile_n": 4.0, "bc_ray_n": 4.0, "bc_sec_pierce": 4.0, "bc_blast_n": 3.0, "bc_chase": 0.9, "law_leech": 0.03, "law_mshield": 0.4, "law_tenure": 0.2, "law_momentum": 0.2, "law_caseload": 0.06, "law_bill": 6.0, "law_season": 0.06, "bc_rate": 1.2, "bc_ret": 2.0, "bc_ammo": 4.0, "bc_fw": 4.0, "bc_loot": 5.0, "crit_mult": 6.0, "crit_explosion": 5.0,
+	"aoe_pct": 1.5, "bc_sec_range": 1.2, "bc_xtra": 0.9, "bc_both": 1.0, "bc_split": 0.9, "bc_seek": 1.2, "bc_knife_n": 4.0, "bc_missile_n": 4.0, "bc_ray_n": 4.0, "bc_sec_pierce": 4.0, "bc_blast_n": 3.0, "bc_chase": 1.0, "law_leech": 0.03, "law_mshield": 0.4, "law_tenure": 0.2, "law_momentum": 0.2, "law_caseload": 0.06, "law_bill": 6.0, "law_season": 0.06, "bc_rate": 1.2, "bc_ret": 2.0, "bc_ammo": 4.0, "bc_fw": 4.0, "bc_loot": 5.0, "crit_mult": 6.0, "crit_explosion": 5.0,
 	"hp_regen_pct": 0.05, "heal_pow": 1.5, "armor_low": 0.3, "iframe_add": 0.4, "dodge_speed": 1.0, "hurt_iframe_add": 0.4,
 	"shield_regen_pct": 3.0, "shield_delay_cut": 0.6, "jump_pow": 0.6, "lifesteal": 0.12, "cd_docs": 0.6, "cd_seal": 0.6,
 	"cd_barrier": 0.6, "cd_slam": 0.5, "docs_pierce": 6.0, "docs_speed": 1.5, "docs_turn": 12.0, "cost_cut": 0.5,
