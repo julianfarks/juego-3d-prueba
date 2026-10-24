@@ -36,6 +36,11 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.10.2 — la tienda ya no se atraviesa
+- El modelo de la tienda era solo visual (sin colliders). Ahora cada una de las 6 variantes (furgoneta, cabaña, contenedor, carpa, pabellón, despacho) lleva un `StaticBody3D` «ShopCollider» (capas mundo + cámara) ajustado a su geometría: cuerpo, cabina, mostrador, columnas, plataforma. El frente del mostrador queda libre.
+- La zona de atención es independiente de la colisión: `Interactable.anchor` / `use_point()` la sitúa delante del mostrador (radio 2,6 m). «TIENDA» solo se ofrece ahí, no desde dentro, los lados ni por detrás. Abrir o cerrar la interfaz no toca los colliders.
+- Prueba: `--shopcoltest` (8 direcciones por bioma, rodear, punto de atención, joystick táctil y mando reales).
+
 ## Novedades 0.10.1 — tienda deslizable, relanzamientos de tienda y cofres sin relanzar
 - **Tienda**: toda la lista se desliza con el dedo (también si el gesto empieza sobre una carta o un botón de compra), con inercia; un gesto que supera el umbral es un desplazamiento y nunca compra (comprar exige pulsación corta + confirmación). Cabecera, dinero y botones inferiores fijos; margen final para que la última oferta quede completa.
 - **RELANZAR OFERTAS** (máx. 3 por visita): «RELANZAR (20 $) — 1/3», precio 20 $ ×1,5 por uso (reducido por «Relanzamiento Barato»), confirmación con precio, sin saldo no cobra, al 3.º se desactiva («RELANZAMIENTOS AGOTADOS»). La visita = una arena: cerrar y reabrir la tienda conserva ofertas y contador; la arena siguiente lo reinicia (`Main._shop_visit`).
