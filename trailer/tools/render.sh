@@ -1,6 +1,6 @@
 #!/bin/bash
 # Renderiza el tráiler con el Movie Maker de Godot y lo monta.
-#   trailer/tools/render.sh horizontal|vertical|preview [--only=story,action,logo]
+#   trailer/tools/render.sh horizontal|horizontal_en|vertical|preview [--only=story,action,logo]
 # Requiere: godot 4.3 en el PATH, xvfb-run, ffmpeg, python3.
 set -e
 cd "$(dirname "$0")/../.."
@@ -11,6 +11,7 @@ SAVE="$HOME/.local/share/godot/app_userdata/Lawyer Mayhem 3D/lawyer_mayhem_save.
 rm -f "$SAVE"*
 case "$MODE" in
   horizontal) W=1920; H=1080; EXTRA="";;
+  horizontal_en) W=1920; H=1080; EXTRA="--lang=en";;
   vertical)   W=1080; H=1920; EXTRA="--vertical";;
   preview)    W=640;  H=360;  EXTRA="";;
   preview_v)  W=360;  H=640;  EXTRA="--vertical";;

@@ -91,6 +91,8 @@ func _ready() -> void:
 			vertical = true
 		elif a.begins_with("--only="):
 			only = a.substr(7)
+		elif a == "--lang=en":
+			TrailerSets.lang_en = true
 	call_deferred("_run")
 
 
@@ -277,7 +279,7 @@ func _build_overlay() -> void:
 	_logo_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_logo_box.add_child(_logo_title)
 	_logo_tag = Label.new()
-	_logo_tag.text = "«OBJECIÓN… ¡Y A REPARTIR SENTENCIAS!»"
+	_logo_tag.text = TrailerSets.tr_("«OBJECIÓN… ¡Y A REPARTIR SENTENCIAS!»")
 	_logo_tag.add_theme_font_override("font", _font("InterDisplay-BlackItalic.otf"))
 	_logo_tag.add_theme_font_size_override("font_size", 42 if not vertical else 44)
 	_logo_tag.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -313,7 +315,7 @@ func _update_overlay() -> void:
 	for c in CAPTIONS:
 		if G >= c[1] and G < c[2]:
 			_caption.visible = true
-			_caption.text = c[0]
+			_caption.text = TrailerSets.tr_(c[0])
 			_caption.visible_ratio = clampf((G - c[1]) / 0.9, 0.0, 1.0)
 			_caption.modulate.a = clampf((c[2] - G) / 0.25, 0.0, 1.0)
 			var w := vs.x * (0.6 if not vertical else 0.86)
@@ -324,7 +326,7 @@ func _update_overlay() -> void:
 	for bt in BIGS:
 		if G >= bt[1] and G < bt[2]:
 			_big.visible = true
-			_big.text = bt[0]
+			_big.text = TrailerSets.tr_(bt[0])
 			var tin := clampf((G - bt[1]) / 0.16, 0.0, 1.0)
 			var tout := clampf((bt[2] - G) / 0.22, 0.0, 1.0)
 			_big.modulate.a = minf(tin, tout)
@@ -342,7 +344,7 @@ func _update_overlay() -> void:
 	for st in STAMPS:
 		if G >= st[1] and G < st[2]:
 			_stamp_box.visible = true
-			_stamp.text = st[0]
+			_stamp.text = TrailerSets.tr_(st[0])
 			var k := clampf((G - st[1]) / 0.1, 0.0, 1.0)
 			var s2 := lerpf(3.0, 1.0, k * k)
 			_stamp_box.reset_size()

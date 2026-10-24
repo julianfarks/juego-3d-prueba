@@ -27,9 +27,34 @@ static func _mesh(b: MeshBuilder, parent: Node3D) -> MeshInstance3D:
 	return Mats.mesh_instance(b.build(), Mats.world_material(), parent)
 
 
+## Versión en inglés del tráiler (--lang=en): traducción de los rótulos propios del tráiler (no del juego, que solo está en español).
+static var lang_en := false
+const EN := {
+	"EXPEDIENTE 001 · EL CASO DEL SIGLO": "CASE FILE 001 · THE TRIAL OF THE CENTURY",
+	"TRIBUNAL SUPERIOR · EL ABOGADO contra LOS LADRONES": "SUPERIOR COURT · THE LAWYER vs. THE THIEVES",
+	"UN CASO PERDIDO.": "A LOST CASE.",
+	"UNA JUSTICIA\nMUY PERSONAL.": "A VERY PERSONAL\nKIND OF JUSTICE.",
+	"CONSTRUYE UNA\nBUILD IMPARABLE.": "BUILD AN\nUNSTOPPABLE BUILD.",
+	"NINGÚN LADRÓN\nESTÁ A SALVO.": "NO THIEF\nIS SAFE.",
+	"¡NO CULPABLES!": "NOT GUILTY!",
+	"¡CULPABLE!": "GUILTY!",
+	"«OBJECIÓN… ¡Y A REPARTIR SENTENCIAS!»": "“OBJECTION… AND SENTENCES ARE SERVED!”",
+	"LICENCIADO EN DERECHO": "LAW DEGREE",
+	"LISTO": "DONE",
+	"PRUEBA A": "EXHIBIT A",
+	"Huellas del ladrón\nen la escena": "Thief's fingerprints\nat the scene",
+	"JUEZ": "JUDGE",
+	"COARTADA:\nESTABA EN\nOTRO SITIO": "ALIBI:\nI WAS\nELSEWHERE",
+}
+
+
+static func tr_(t: String) -> String:
+	return String(EN.get(t, t)) if lang_en else t
+
+
 static func label3d(text: String, size := 48, col := Color(0.1, 0.08, 0.06), outline := 0) -> Label3D:
 	var l := Label3D.new()
-	l.text = text
+	l.text = tr_(text)
 	l.font_size = size
 	l.pixel_size = 0.004
 	l.modulate = col
