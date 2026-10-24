@@ -68,10 +68,10 @@ static func profile(b: Build) -> Dictionary:
 	p["m_missiles"] = mini(int(b.s("bc_missile")) + int(b.s("bc_missile_n")), 8) if b.s("bc_missile") > 0.0 else 0
 	p["m_rays"] = mini(int(b.s("bc_ray")) + rn, 7) if b.s("bc_ray") > 0.0 else 0
 	p["m_retray"] = mini(int(b.s("bc_retray")) + rn, 7) if b.s("bc_retray") > 0.0 else 0
-	p["m_files"] = int(b.s("bc_files"))
-	p["m_ghosts"] = int(b.s("bc_ghost"))
-	p["m_discs"] = int(b.s("bc_disc"))
-	p["m_laser"] = int(b.s("bc_laser"))
+	p["m_files"] = mini(int(b.s("bc_files")), 8)
+	p["m_ghosts"] = mini(int(b.s("bc_ghost")), 3)
+	p["m_discs"] = mini(int(b.s("bc_disc")), 6)
+	p["m_laser"] = mini(int(b.s("bc_laser")), 8)
 	p["m_open"] = b.s("bc_open")
 	p["m_wave"] = b.s("bc_wave")
 	p["m_gren"] = b.s("bc_gren")

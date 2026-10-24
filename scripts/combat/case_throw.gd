@@ -210,7 +210,7 @@ func make_profile() -> Dictionary:
 func plan_cases(p: Dictionary) -> Array:
 	var b: Build = GameState.build
 	var plan: Array = [{"mult": 1.0, "side": 1.0, "ang": 0.0, "delay": 0.0, "range_x": 1.0}]
-	var extra := int(b.s("bc_cases"))
+	var extra := mini(int(b.s("bc_cases")), MAX_CASES)
 	if b.s("bc_double") > 0.0:
 		plan.append({"mult": 0.6 + 0.12 * b.s("bc_double"), "side": -1.0, "ang": 0.0, "delay": 0.14, "range_x": 0.85})   # recorrido propio, curva opuesta
 	if b.s("boomerang") > 0.0:
@@ -221,7 +221,7 @@ func plan_cases(p: Dictionary) -> Array:
 		plan.append({"mult": 0.65, "side": -1.0, "ang": 0.0, "delay": 0.12, "range_x": 0.9})   # Doble Alegato
 	if b.s("slam_double") > 0.0 and randf() < b.s("slam_double"):
 		plan.append({"mult": 0.8, "side": -1.0, "ang": 0.0, "delay": 0.28, "range_x": 0.9})
-	while plan.size() > MAX_CASES - int(p.get("m_ghosts", 0)):
+	while plan.size() > 1 and plan.size() > MAX_CASES - mini(int(p.get("m_ghosts", 0)), 3):
 		plan.pop_back()
 	# abanico: reparte los ángulos de los maletines adicionales alrededor de la dirección de apuntado
 	var n := plan.size()

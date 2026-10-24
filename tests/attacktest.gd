@@ -176,9 +176,106 @@ func _run() -> void:
 			syn_n += 1
 	ok(syn_n >= 8, "A1.3 hay al menos 8 sinergias nuevas de maletín (%d)" % syn_n)
 
+	var en: Array = []
+	if not ("--stress" in OS.get_cmdline_user_args()):
+		await _a2_a4()
+
+	# ---------------------------------------------------------------- A5. límites de rendimiento y seguridad
+	await _reset()
+	var stress_ids: Array = ["case_knives", "case_missiles", "case_rays", "case_orbit", "case_files", "case_ghost", "case_fireworks", "case_discs", "case_laser",
+			"case_open", "case_retray", "case_kfall", "case_wave", "case_gren", "case_chase", "case_blast", "case_shock", "case_bounce",
+			"case_more_knives", "case_more_missiles", "case_more_rays", "case_xtra", "case_both", "case_split", "case_seek", "case_blast_n",
+			"case_cases", "case_double", "case_magazine", "case_multi", "case_pyro", "case_frag", "case_docs", "case_rain"]
+	for ua in OS.get_cmdline_user_args():
+		if ua.begins_with("--ids="):
+			stress_ids = ua.substr(6).split(",")
+	for id in stress_ids:
+		var d: Dictionary = UpgradeDB.get_def(id)
+		var mx: int = mini(int(d["max"]), 6)
+		for k in mx:
+			GameState.build.add(id, 3, true)
+	en = await _cluster()
+	var extra_n := 6
+	for ua2 in OS.get_cmdline_user_args():
+		if ua2.begins_with("--extra="):
+			extra_n = int(ua2.substr(8))
+	for k in extra_n:
+		var e2: Enemy = await _spawn("thief", Vector3(randf_range(-5, 5), 0.1, randf_range(-12, -5)))
+		en.append(e2)
+	var worst_ms := 0.0
+	var dbg_i := 0
+	var base_phys := 0.0
+	for k in 20:
+		await _frames(1)
+		base_phys = maxf(base_phys, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS))
+	var worst_phys := 0.0
+	var max_cases := 0
+	var sec_cap_ok := true
+	print("[INFO] estrés: %d enemigos, %d tipos de mejora" % [Combat.arena_enemies().size(), GameState.build.type_count()])
+	for k in 5:
+		print("[INFO] estrés: lanzamiento %d, FPS %d" % [k, Engine.get_frames_per_second()])
+		player.skills.cd[0] = 0.0
+		print("[INFO] antes de try_cast")
+		var rc: bool = player.skills.try_cast(0)
+		print("[INFO] try_cast -> ", rc)
+		var tt := 0.0
+		while (ct.in_flight() or ct.mods.busy()) and tt < 10.0:
+			var t0 := Time.get_ticks_usec()
+			await _frames(1)
+			if dbg_i < 5:
+				print("[INFO] frame %d: %.0f ms" % [dbg_i, float(Time.get_ticks_usec() - t0) / 1000.0])
+			worst_ms = maxf(worst_ms, float(Time.get_ticks_usec() - t0) / 1000.0)
+			max_cases = maxi(max_cases, ct.cases.size())
+			worst_phys = maxf(worst_phys, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS))
+			if ct.mods.shots.size() > CaseMods.MAX_SHOTS or ct.secondaries.size() > CaseThrow.MAX_SECONDARY + 4:
+				sec_cap_ok = false
+			tt += 0.033
+			dbg_i += 1
+			if dbg_i % 20 == 0:
+				print("[INFO] t=%.1f casos=%d shots=%d sec=%d proy=%d fps=%d" % [tt, ct.cases.size(), ct.mods.shots.size(), ct.secondaries.size(), GameState.projectiles.count() if GameState.projectiles != null else -1, Engine.get_frames_per_second()])
+	ok(sec_cap_ok, "A5.1 los proyectiles simultáneos respetan los límites (máx. %d de %d)" % [_mc("max_shots"), CaseMods.MAX_SHOTS])
+	ok(max_cases <= CaseThrow.MAX_CASES, "A5.2 los maletines simultáneos respetan el límite (máx. %d de %d)" % [max_cases, CaseThrow.MAX_CASES])
+	ok(_mc("capped") >= 0, "A5.3 salvas recortadas por presupuesto: %d (el límite actúa en vez de crear proyectiles sin fin)" % _mc("capped"))
+	print("[INFO] peor fotograma en la prueba de estrés (build máxima, 11 enemigos, renderizado por software): %.1f ms" % worst_ms)
+	print("[INFO] tiempo de física por fotograma (scripts de combate incluidos): reposo %.1f ms, pico en el estrés %.1f ms" % [base_phys * 1000.0, worst_phys * 1000.0])
+	ok(worst_phys < 0.25, "A5.4b el tiempo de física de scripts no se dispara (pico %.0f ms; reposo %.0f ms)" % [worst_phys * 1000.0, base_phys * 1000.0])
+	ok(worst_ms < 1500.0, "A5.4 sin bloqueos graves en el peor fotograma (%.0f ms, entorno sin GPU: orientativo)" % worst_ms)
+	await _wait_idle(12.0)
+	ok(not ct.in_flight() and not ct.mods.busy(), "A5.5 todo vuelve y se limpia: sin maletines ni proyectiles colgados")
+	ok(ct.mods.shots.is_empty() and ct.cases.is_empty(), "A5.6 no quedan proyectiles vivos tras el combate")
+	ok(ct._hand() == null or ct._hand().visible, "A5.7 el maletín de la mano reaparece al regresar")
+	await _shot("a_stress")
+
+	# ---------------------------------------------------------------- A6. contra un jefe
+	await _reset()
+	for id in ["case_knives", "case_missiles", "case_rays", "case_orbit", "case_discs", "case_laser", "case_ghost", "case_wave", "case_gren"]:
+		GameState.build.add(id, 2, true)
+	GameState.arena_index = 5
+	main.arena.index = 5
+	var boss: Enemy = main.arena._spawn_enemy("boss", Vector3(0, 0.3, -9))
+	await _frames(40)
+	var bhp0: float = boss.hp
+	boss.invuln_t = 0.0
+	for k in 3:
+		player.skills.cd[0] = 0.0
+		player.skills.try_cast(0)
+		await _wait_idle(10.0)
+	ok(boss.hp < bhp0 or not boss.alive, "A6.1 los ataques secundarios dañan al jefe (%.0f → %.0f)" % [bhp0, boss.hp])
+	ok(Config.dev_god_mode, "A6.2 (modo dios: no se mide la supervivencia del jugador)")
+	ok(not ct.in_flight(), "A6.3 el maletín regresó con el jefe en pantalla")
+	await _shot("a_boss")
+
+	print("\n==== ATTACKTEST: %d pass / %d fail ====" % [passes, fails.size()])
+	for f in fails:
+		print("FAIL: ", f)
+	get_tree().quit(1 if not fails.is_empty() else 0)
+
+
+func _a2_a4() -> void:
+	var en: Array = []
 	# ---------------------------------------------------------------- A2. cada ataque por separado
 	await _reset()
-	var en := await _cluster()
+	en = await _cluster()
 	_add("case_knives", 1)
 	await _throw()
 	ok(_mc("knives") == 2 and _mod_hits() >= 1, "A2.1 Cuchillas del Litigio: salen 2 cuchillas y dañan (%d, golpes %d)" % [_mc("knives"), _mod_hits()])
@@ -472,66 +569,3 @@ func _run() -> void:
 	await _throw()
 	ok(_mc("laser_knives") >= 2, "A4.9 Láser + Cuchillas: el haz deja cuchillas (%d)" % _mc("laser_knives"))
 
-	# ---------------------------------------------------------------- A5. límites de rendimiento y seguridad
-	await _reset()
-	for id in ["case_knives", "case_missiles", "case_rays", "case_orbit", "case_files", "case_ghost", "case_fireworks", "case_discs", "case_laser",
-			"case_open", "case_retray", "case_kfall", "case_wave", "case_gren", "case_chase", "case_blast", "case_shock", "case_bounce",
-			"case_more_knives", "case_more_missiles", "case_more_rays", "case_xtra", "case_both", "case_split", "case_seek", "case_blast_n",
-			"case_cases", "case_double", "case_magazine", "case_multi", "case_pyro", "case_frag", "case_docs", "case_rain"]:
-		var d: Dictionary = UpgradeDB.get_def(id)
-		var mx: int = mini(int(d["max"]), 6)
-		for k in mx:
-			GameState.build.add(id, 3, true)
-	en = await _cluster()
-	for k in 6:
-		var e2: Enemy = await _spawn("thief", Vector3(randf_range(-5, 5), 0.1, randf_range(-12, -5)))
-		en.append(e2)
-	var worst_ms := 0.0
-	var max_cases := 0
-	var sec_cap_ok := true
-	for k in 5:
-		player.skills.cd[0] = 0.0
-		player.skills.try_cast(0)
-		var tt := 0.0
-		while (ct.in_flight() or ct.mods.busy()) and tt < 10.0:
-			var t0 := Time.get_ticks_usec()
-			await _frames(1)
-			worst_ms = maxf(worst_ms, float(Time.get_ticks_usec() - t0) / 1000.0)
-			max_cases = maxi(max_cases, ct.cases.size())
-			if ct.mods.shots.size() > CaseMods.MAX_SHOTS or ct.secondaries.size() > CaseThrow.MAX_SECONDARY + 4:
-				sec_cap_ok = false
-			tt += 0.033
-	ok(sec_cap_ok, "A5.1 los proyectiles simultáneos respetan los límites (máx. %d de %d)" % [_mc("max_shots"), CaseMods.MAX_SHOTS])
-	ok(max_cases <= CaseThrow.MAX_CASES, "A5.2 los maletines simultáneos respetan el límite (máx. %d de %d)" % [max_cases, CaseThrow.MAX_CASES])
-	ok(_mc("capped") >= 0, "A5.3 salvas recortadas por presupuesto: %d (el límite actúa en vez de crear proyectiles sin fin)" % _mc("capped"))
-	print("[INFO] peor fotograma en la prueba de estrés (build máxima, 11 enemigos, renderizado por software): %.1f ms" % worst_ms)
-	ok(worst_ms < 1500.0, "A5.4 sin bloqueos graves en el peor fotograma (%.0f ms, entorno sin GPU: orientativo)" % worst_ms)
-	await _wait_idle(12.0)
-	ok(not ct.in_flight() and not ct.mods.busy(), "A5.5 todo vuelve y se limpia: sin maletines ni proyectiles colgados")
-	ok(ct.mods.shots.is_empty() and ct.cases.is_empty(), "A5.6 no quedan proyectiles vivos tras el combate")
-	ok(ct._hand() == null or ct._hand().visible, "A5.7 el maletín de la mano reaparece al regresar")
-	await _shot("a_stress")
-
-	# ---------------------------------------------------------------- A6. contra un jefe
-	await _reset()
-	for id in ["case_knives", "case_missiles", "case_rays", "case_orbit", "case_discs", "case_laser", "case_ghost", "case_wave", "case_gren"]:
-		GameState.build.add(id, 2, true)
-	GameState.arena_index = 5
-	main.arena.index = 5
-	var boss: Enemy = main.arena._spawn_enemy("boss", Vector3(0, 0.3, -9))
-	await _frames(40)
-	var bhp0: float = boss.hp
-	boss.invuln_t = 0.0
-	for k in 3:
-		player.skills.cd[0] = 0.0
-		player.skills.try_cast(0)
-		await _wait_idle(10.0)
-	ok(boss.hp < bhp0 or not boss.alive, "A6.1 los ataques secundarios dañan al jefe (%.0f → %.0f)" % [bhp0, boss.hp])
-	ok(Config.dev_god_mode, "A6.2 (modo dios: no se mide la supervivencia del jugador)")
-	ok(not ct.in_flight(), "A6.3 el maletín regresó con el jefe en pantalla")
-	await _shot("a_boss")
-
-	print("\n==== ATTACKTEST: %d pass / %d fail ====" % [passes, fails.size()])
-	for f in fails:
-		print("FAIL: ", f)
-	get_tree().quit(1 if not fails.is_empty() else 0)
