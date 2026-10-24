@@ -599,7 +599,7 @@ func _t6_rewards() -> void:
 				ok(absf(p.y - gy) < 0.05 and Terrain.slope_deg(p.x, p.z) < 10.0 and absf(p.x) < half - 2.0 and absf(p.z) < half - 2.0, "T6.%s.%d %s sobre suelo llano (pend. %.1f°) y dentro de la arena" % [id, zp, it.kind, Terrain.slope_deg(p.x, p.z)])
 				player.teleport_to(Vector3(0, Terrain.ground_y(0, 0) + 0.3, 0))
 				await _frames(3)
-				var reached := await _walk_to(p, 9.0)
+				var reached := await _walk_to((it as Interactable).use_point(), 9.0)
 				await _frames(6)
 				ok(reached and player.interact_target == it or (it.kind == "portal" and not it.enabled), "T6.%s.%d el jugador puede llegar al %s y seleccionarlo" % [id, zp, it.kind])
 			if chest != null:

@@ -425,7 +425,7 @@ func _update_interaction() -> void:
 		var it := n as Interactable
 		if it == null or not it.enabled or not it.is_inside_tree():
 			continue
-		var d := it.global_position.distance_to(global_position)
+		var d := it.use_point().distance_to(global_position)
 		if d <= it.radius and d < best_d:
 			best_d = d
 			best = it

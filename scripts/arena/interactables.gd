@@ -7,6 +7,7 @@ extends Node3D
 var prompt := "Interactuar"
 var action_text := "USAR"            # texto del botón táctil mientras este objeto es el objetivo
 var radius := 2.8
+var anchor := Vector3.ZERO           # punto de uso (local): la zona de atención puede estar delante del modelo, no en su centro
 var enabled := true
 var callback: Callable = Callable()
 var kind := "generic"
@@ -24,6 +25,10 @@ var _ind_base_y := 2.6
 func _ready() -> void:
 	add_to_group("interactable")
 	set_process(_ind != null)
+
+
+func use_point() -> Vector3:
+	return to_global(anchor)
 
 
 func activate(player: Node) -> void:
@@ -89,7 +94,7 @@ func _process(delta: float) -> void:
 	var show_it: bool = ind_active and pl != null and pl.visible and pl.alive and is_inside_tree()
 	var d := 999.0
 	if show_it:
-		d = global_position.distance_to(pl.global_position)
+		d = use_point().distance_to(pl.global_position)
 		show_it = d <= ind_range
 	_ind.visible = show_it
 	if not show_it:

@@ -467,6 +467,76 @@ static func _banner(rng: RandomNumberGenerator, pal: Dictionary) -> Dictionary:
 	return _finish(b, "banner", Vector3(1.6, 4.7, 1.6), Vector3(0.5, 4.0, 0.5), Vector3(0, 2.0, 0))
 
 
+# ====================================================================== COLISIONES DE LA TIENDA
+## Colisiones físicas de la tienda, ajustadas a la geometría REAL de cada variante (coordenadas locales de la tienda;
+## el frente del mostrador mira a +Z). Cajas [min, max]; los cilindros [centro_xz, radio, y_min, y_max].
+## El mostrador es sólido; la zona de atención (frente al mostrador) queda libre. Las cajas bajan hasta y=-0.6 para
+## no dejar huecos por debajo en terreno irregular. 'anchor' = punto de uso (accesible, delante del mostrador).
+static func shop_collision(kind: String) -> Dictionary:
+	var boxes: Array = []
+	var cyls: Array = []
+	var anchor := Vector3(0, 0, 2.5)
+	match kind:
+		"truck":
+			boxes.append([Vector3(-2.1, -0.6, -1.4), Vector3(2.1, 2.5, 0.8)])           # caja de la furgoneta + bajos
+			boxes.append([Vector3(-3.45, -0.6, -1.35), Vector3(-2.1, 1.95, 0.75)])      # cabina
+			boxes.append([Vector3(-1.1, -0.6, 0.8), Vector3(1.9, 1.5, 1.5)])            # mostrador con género
+			anchor = Vector3(0.4, 0, 2.5)
+		"hut":
+			boxes.append([Vector3(-1.8, -0.6, -1.6), Vector3(1.8, 2.4, 0.8)])
+			boxes.append([Vector3(-1.6, -0.6, 0.8), Vector3(1.6, 1.4, 1.55)])
+			anchor = Vector3(0, 0, 2.5)
+		"container":
+			boxes.append([Vector3(-2.6, -0.6, -1.6), Vector3(2.6, 2.7, 0.8)])
+			boxes.append([Vector3(-2.0, -0.6, 0.8), Vector3(2.0, 1.4, 1.55)])
+			anchor = Vector3(0, 0, 2.5)
+		"tent":
+			boxes.append([Vector3(-2.1, -0.6, -1.7), Vector3(2.1, 1.2, 1.7)])           # faldón de la carpa
+			boxes.append([Vector3(-1.45, 1.2, -1.2), Vector3(1.45, 2.6, 1.2)])          # cuerpo cónico
+			boxes.append([Vector3(-1.4, -0.6, 1.0), Vector3(1.4, 1.1, 2.0)])            # mostrador
+			anchor = Vector3(0, 0, 3.0)
+		"pavilion":
+			cyls.append([Vector2(0, 0), 2.3, -0.6, 0.4])                                # plataforma
+			for sx in [-1.0, 1.0]:
+				for sz in [-1.0, 1.0]:
+					boxes.append([Vector3(sx * 1.34 - 0.17, 0.0, sz * 1.34 - 0.17), Vector3(sx * 1.34 + 0.17, 3.4, sz * 1.34 + 0.17)])   # columnas
+			boxes.append([Vector3(-1.3, 0.0, 0.35), Vector3(1.3, 1.3, 1.25)])           # mostrador
+			anchor = Vector3(0, 0, 3.1)
+		_:   # booth
+			boxes.append([Vector3(-2.15, -0.6, -0.95), Vector3(2.15, 1.4, 0.95)])       # mostrador de mármol
+			for sx in [-1.9, 1.9]:
+				boxes.append([Vector3(sx - 0.3, -0.6, -0.8), Vector3(sx + 0.3, 3.7, -0.2)])   # columnas
+			boxes.append([Vector3(-1.7, 1.25, -1.05), Vector3(1.7, 3.55, -0.85)])       # panel trasero
+			anchor = Vector3(0, 0, 2.4)
+	return {"boxes": boxes, "cyls": cyls, "anchor": anchor}
+
+
+static func _shop_body(kind: String) -> StaticBody3D:
+	var data := shop_collision(kind)
+	var sb := StaticBody3D.new()
+	sb.name = "ShopCollider"
+	sb.collision_layer = 17          # mundo + bloqueo de cámara, como el resto de estructuras
+	sb.collision_mask = 0
+	for bx in data["boxes"]:
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		var mn: Vector3 = bx[0]
+		var mx: Vector3 = bx[1]
+		sh.size = mx - mn
+		cs.shape = sh
+		cs.position = (mn + mx) * 0.5
+		sb.add_child(cs)
+	for cy in data["cyls"]:
+		var cs2 := CollisionShape3D.new()
+		var sh2 := CylinderShape3D.new()
+		sh2.radius = float(cy[1])
+		sh2.height = float(cy[3]) - float(cy[2])
+		cs2.shape = sh2
+		cs2.position = Vector3((cy[0] as Vector2).x, (float(cy[2]) + float(cy[3])) * 0.5, (cy[0] as Vector2).y)
+		sb.add_child(cs2)
+	return sb
+
+
 # ====================================================================== TIENDA / COFRE / PORTAL TEMÁTICOS
 ## Tienda con identidad por bioma. Mantiene el mismo contrato que PropsFactory.shop_node() (Node3D visual).
 static func shop(pal: Dictionary) -> Node3D:
@@ -562,6 +632,7 @@ static func shop(pal: Dictionary) -> Node3D:
 			b.box(Vector3(2.4, 0.4, 0.1), _x(Vector3(0, 3.2, 0.1)), _g(accent, 0.9))
 			sign_y = 4.4
 	Mats.mesh_instance(b.build(), Mats.world_material(), root)
+	root.add_child(_shop_body(kind))       # estructura sólida: no se atraviesa (el modelo antes era solo visual)
 	var lbl := Label3D.new()
 	lbl.text = String(pal.get("shop_name", "TIENDA DEL NOTARIO"))
 	lbl.font_size = 56

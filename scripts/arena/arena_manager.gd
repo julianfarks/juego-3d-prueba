@@ -584,7 +584,9 @@ func _spawn_rewards() -> void:
 		_shop.kind = "shop"
 		_shop.prompt = "Entrar a la tienda"
 		_shop.action_text = "TIENDA"
-		_shop.radius = 3.4
+		# zona de atención DELANTE del mostrador (independiente de la colisión): se usa desde ahí, no desde dentro del modelo
+		_shop.anchor = BiomeProps.shop_collision(String(pal.get("shop_kind", "truck")))["anchor"]
+		_shop.radius = 2.6
 		_shop.setup_indicator("TIENDA", 3.4, Color(0.6, 1.0, 0.7))
 		_shop.add_child(BiomeProps.shop(pal))
 		_shop.position = _reward_spot(Vector3(0, 0, 5.5))

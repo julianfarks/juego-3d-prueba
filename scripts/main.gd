@@ -111,6 +111,13 @@ func _ready() -> void:
 			cmn.name = "CameraTest"
 			add_child(cmn)
 			cmn.set("main", self)
+	if Config.cmd_flag("--shopcoltest"):
+		var sct := load("res://tests/shopcoltest.gd")
+		if sct != null:
+			var scn: Node = sct.new()
+			scn.name = "ShopColTest"
+			add_child(scn)
+			scn.set("main", self)
 	if Config.cmd_flag("--shoptest"):
 		var sht := load("res://tests/shoptest.gd")
 		if sht != null:
