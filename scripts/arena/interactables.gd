@@ -17,7 +17,7 @@ var ind_active := true               # false: el indicador permanece oculto (p. 
 var ind_scale := 1.0                 # tamaño del cartel (el del portal es más pequeño: el portal ya es enorme)
 var _ind: Node3D = null
 var _ind_label: Label3D = null
-var _ind_icon: Sprite3D = null
+var _ind_icon: Node3D = null          # guante 3D que señala hacia abajo (ModelFactory.pointer_hand)
 var _ind_t := 0.0
 var _ind_base_y := 2.6
 
@@ -44,15 +44,9 @@ func setup_indicator(text: String, height: float, color := Color(1.0, 0.9, 0.35)
 	_ind.position = Vector3(0, height, 0)
 	add_child(_ind)
 	if icon:
-		_ind_icon = Sprite3D.new()
-		_ind_icon.texture = IconTex.hand(color)
-		_ind_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_ind_icon.no_depth_test = true
-		_ind_icon.shaded = false
-		_ind_icon.pixel_size = 0.0125
-		_ind_icon.position = Vector3(0, 0.95, 0)
-		_ind_icon.render_priority = 10
-		_ind_icon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_ind_icon = ModelFactory.pointer_hand(color)
+		_ind_icon.position = Vector3(0, 1.2, 0)
+		_ind_icon.scale = Vector3.ONE * 0.95
 		_ind.add_child(_ind_icon)
 	_ind_label = Label3D.new()
 	_ind_label.text = text
@@ -78,7 +72,13 @@ func set_indicator(text: String, color: Color, active := true) -> void:
 		_ind_label.text = text
 		_ind_label.modulate = color
 	if _ind_icon != null:
-		_ind_icon.texture = IconTex.hand(color)
+		var old := _ind_icon
+		_ind_icon = ModelFactory.pointer_hand(color)
+		_ind_icon.position = old.position
+		_ind_icon.scale = old.scale
+		_ind.add_child(_ind_icon)
+		_ind.remove_child(old)
+		old.queue_free()
 	if _ind != null:
 		_ind.visible = active and _ind.visible
 
@@ -107,3 +107,10 @@ func _process(delta: float) -> void:
 	# escala con la distancia para que se lea desde lejos
 	s *= clampf(0.75 + d * 0.05, 0.85, 1.5) * ind_scale
 	_ind.scale = Vector3(s, s, s)
+	# el guante mira siempre a la cámara (solo giro en Y: nunca se tumba) y "pica" hacia abajo con un vaivén suave
+	if _ind_icon != null:
+		var cam := get_viewport().get_camera_3d()
+		if cam != null:
+			var to_cam := cam.global_position - _ind.global_position
+			_ind_icon.global_rotation = Vector3(0, atan2(to_cam.x, to_cam.z), 0)
+		_ind_icon.position.y = 1.2 + sin(_ind_t * 4.5) * 0.07

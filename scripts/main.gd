@@ -119,6 +119,13 @@ func _ready() -> void:
 			trn.name = "TrailerDirector"
 			add_child(trn)
 			trn.set("main", self)
+	if Config.cmd_flag("--difftest"):
+		var dft := load("res://tests/difftest.gd")
+		if dft != null:
+			var dfn: Node = dft.new()
+			dfn.name = "DiffTest"
+			add_child(dfn)
+			dfn.set("main", self)
 	if Config.cmd_flag("--endtest"):
 		var ent := load("res://tests/endtest.gd")
 		if ent != null:
@@ -649,17 +656,24 @@ func _show_region_banner(idx: int, hold: float) -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = UIKit.theme()
+	# centrado real y ancho limitado al área visible (antes: position absoluta negativa → el texto salía por la izquierda)
+	var vs := get_viewport().get_visible_rect().size
+	var bw := minf(900.0, vs.x - 48.0)
 	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.anchor_left = 0.5
+	box.anchor_right = 0.5
+	box.anchor_top = 0.5
+	box.anchor_bottom = 0.5
+	box.offset_left = -bw * 0.5
+	box.offset_right = bw * 0.5
+	box.offset_top = -120.0
+	box.offset_bottom = 120.0
 	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.custom_minimum_size = Vector2(900, 0)
-	box.position = Vector2(-450, -120)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(box)
 	var accent: Color = bm["accent"]
 	var l1 := UIKit.label("REGIÓN %d" % (Scaling.cycle_of(idx) + 1), 30, accent.lightened(0.2), HORIZONTAL_ALIGNMENT_CENTER)
-	var l2 := UIKit.title(String(bm["name"]).to_upper(), 58)
+	var l2 := UIKit.title(String(bm["name"]).to_upper(), 58 if vs.x >= 1000.0 else 40)
 	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l2.add_theme_color_override("font_color", Color(1, 1, 1))
 	l2.add_theme_color_override("font_outline_color", accent.darkened(0.55))

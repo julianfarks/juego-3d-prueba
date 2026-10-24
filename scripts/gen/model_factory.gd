@@ -186,6 +186,52 @@ static func briefcase_mesh() -> ArrayMesh:
 	return b.build()
 
 
+## Guante blanco 3D que SEÑALA HACIA ABAJO (índice extendido, resto de dedos y pulgar recogidos, puño con puñeta de color).
+## Es el indicador "interactúa aquí" de las estaciones de la sala y de los cofres. Origen = centro del guante;
+## la punta del índice queda en y = -0.43. Lleva un contorno oscuro (casco invertido) para leerse sobre cualquier fondo.
+static func pointer_hand_mesh(accent: Color) -> ArrayMesh:
+	var b := MeshBuilder.new()
+	var glove := Color(0.97, 0.97, 0.95)
+	var shade := Color(0.80, 0.82, 0.88)
+	# puñeta
+	b.cylinder(0.20, 0.18, 0.12, 10, _x(Vector3(0, 0.43, 0)), _g(accent, 0.25))
+	b.cylinder(0.19, 0.19, 0.03, 10, _x(Vector3(0, 0.36, 0)), accent.darkened(0.35))
+	# dorso de la mano
+	b.box(Vector3(0.40, 0.30, 0.22), _x(Vector3(0, 0.20, 0)), glove)
+	b.sphere(0.12, 8, 5, _x(Vector3(0, 0.34, 0), Vector3.ZERO, Vector3(1.5, 0.6, 0.95)), glove)
+	# tres dedos recogidos (medio, anular, meñique): nudillos abultados y puntas dobladas hacia la palma
+	for i in 3:
+		var x := -0.05 + 0.10 * i
+		b.box(Vector3(0.088, 0.14, 0.2), _x(Vector3(x, 0.03, 0.01)), shade)
+		b.sphere(0.056, 7, 5, _x(Vector3(x, -0.05, 0.08), Vector3.ZERO, Vector3(0.82, 0.9, 1.0)), glove)
+	# pulgar recogido sobre los dedos
+	b.box(Vector3(0.09, 0.17, 0.10), _x(Vector3(0.235, 0.16, 0.05), Vector3(0, 0, -22)), glove)
+	b.sphere(0.058, 7, 5, _x(Vector3(0.20, 0.07, 0.09), Vector3.ZERO, Vector3(0.9, 0.9, 1.0)), glove)
+	# ÍNDICE extendido hacia abajo
+	b.box(Vector3(0.095, 0.10, 0.17), _x(Vector3(-0.15, 0.06, 0.0)), glove)
+	b.cylinder(0.050, 0.046, 0.40, 8, _x(Vector3(-0.15, -0.19, 0.0)), glove)
+	b.sphere(0.052, 8, 6, _x(Vector3(-0.15, -0.39, 0.0)), Color(1.0, 1.0, 1.0))
+	return b.build()
+
+
+## Nodo con el guante apuntando hacia abajo + contorno. 'accent' tiñe la puñeta.
+static func pointer_hand(accent: Color) -> Node3D:
+	var n := Node3D.new()
+	n.name = "PointerHand"
+	var mesh := pointer_hand_mesh(accent)
+	var mi := Mats.mesh_instance(mesh, Mats.char_material(), n)
+	mi.name = "Glove"
+	var ol := StandardMaterial3D.new()
+	ol.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ol.albedo_color = Color(0.06, 0.04, 0.1)
+	ol.cull_mode = BaseMaterial3D.CULL_FRONT
+	var hull := Mats.mesh_instance(mesh, ol, n)
+	hull.name = "Outline"
+	hull.scale = Vector3(1.16, 1.07, 1.3)
+	hull.position = Vector3(0, -0.01, -0.02)
+	return n
+
+
 # =============================================================================
 #  ENEMIGOS
 # =============================================================================
