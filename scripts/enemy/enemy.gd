@@ -66,6 +66,8 @@ var _barrage_pts: Array = []
 var _dash_left := 0.0
 var _dash_hit := false
 var _since_hit := 99.0
+static var chase_us := 0                    # medición de rendimiento (pruebas): microsegundos acumulados en _chase
+static var chase_n := 0
 var _seed := 0.0
 var _sep := Vector3.ZERO
 var _sep_frame := 0
@@ -78,6 +80,26 @@ var _bar: Node3D
 var _bar_fill: MeshInstance3D
 var _bar_mesh: QuadMesh
 var _strafe_dir := 1.0
+# --- navegación (ver NavGrid) ---
+var nav_cls := 0                   # 0 = pequeño, 1 = grande (tanque, élite, minijefe, jefe)
+var _wp := Vector3.INF             # siguiente punto de paso (caché; se recalcula cada ~0.12 s, escalonado por enemigo)
+var _wp_info := 0                  # 0 línea directa, 1 rodeando por el campo de flujo, 2 sin campo aún, 3 sin ruta
+var _wp_t := 0.0
+var _los_t := 0.0
+var _los_ok := true                # línea de visión física (rayo contra el mundo) hasta el jugador
+var _slot_ang := 0.0               # ángulo (mundo) del hueco alrededor del jugador al que quiere llegar
+var _slot_off := 0.0
+var _stk_pos := Vector3.ZERO
+var _stk_acc := 0.0
+var _stuck_t := 0.0                # segundos acumulados sin avanzar pese a querer moverse
+var _stuck_lvl := 0
+var _prog_best := 1e9              # mejor "distancia restante" (pasos de ruta o metros) conseguida
+var _prog_t := 0.0                 # tiempo sin mejorarla
+var _prog_mode := -1
+var _detour_t := 0.0
+var _detour_pt := Vector3.INF
+var nav_unstuck_count := 0         # veces que el anti-atasco tuvo que intervenir (estadística/tests)
+static var _slot_n := 0
 
 static var _bar_back_mat: StandardMaterial3D
 static var _bar_front_mat: StandardMaterial3D
@@ -144,6 +166,21 @@ func setup(p_kind: String, p_arena_index: int, p_affix: String, pos: Vector3, p_
 	_kb = Vector3.ZERO
 	_boom_t = -1.0
 	_dead_t = 0.0
+	nav_cls = 1 if body_radius > 0.6 else 0
+	_wp = Vector3.INF
+	_wp_info = 2
+	_wp_t = randf() * 0.1
+	_los_t = 0.0
+	_los_ok = true
+	_stuck_t = 0.0
+	_stuck_lvl = 0
+	_prog_best = 1e9
+	_prog_t = 0.0
+	_prog_mode = -1
+	_detour_t = 0.0
+	_stk_acc = 0.0
+	_slot_n += 1
+	_slot_off = (fmod(float(_slot_n) * 2.39996, TAU) - PI) * 0.35
 	_clear_tele()
 	_vis_key = ""
 	home = pos
@@ -278,7 +315,10 @@ func _physics_process(delta: float) -> void:
 		S.PATROL:
 			_patrol(delta, p)
 		S.CHASE:
+			var _t0 := Time.get_ticks_usec()
 			_chase(delta, p)
+			chase_us += Time.get_ticks_usec() - _t0
+			chase_n += 1
 		S.TELE:
 			_tele_tick(delta, p)
 		S.ACT:
@@ -380,6 +420,29 @@ func _patrol(delta: float, p: Player) -> void:
 	_move_toward_dir(dir, _speed_now() * 0.45, delta)
 
 
+func _nav() -> NavGrid:
+	var a = GameState.arena
+	if a != null and is_instance_valid(a):
+		var nv = a.get("nav")
+		if nv != null and nv.ready:
+			return nv
+	return null
+
+
+## Línea de visión física hasta el jugador (solo muros y obstáculos; el relieve suave del terreno no cuenta, igual que en los proyectiles).
+func _ray_los(p: Player) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.0, 0), p.global_position + Vector3(0, 1.0, 0), Config.L_WORLD)
+	if Terrain.body_rid.is_valid():
+		q.exclude = [Terrain.body_rid]
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
+func _flat_dir_to(pt: Vector3) -> Vector3:
+	var v := pt - global_position
+	v.y = 0.0
+	return v.normalized() if v.length() > 0.05 else Vector3.ZERO
+
+
 func _chase(delta: float, p: Player) -> void:
 	if p == null:
 		_move_toward_dir(Vector3.ZERO, 0.0, delta)
@@ -388,48 +451,110 @@ func _chase(delta: float, p: Player) -> void:
 	var dist := to.length()
 	var dir := to.normalized() if dist > 0.01 else Vector3.FORWARD
 	_face(dir, 9.0, delta)
-	# ¿atacar?
+	var behavior := String(def["behavior"])
+	var nav := _nav()
+	# línea de visión física (escalonada)
+	_los_t -= delta
+	if _los_t <= 0.0:
+		_los_t = 0.1 + fmod(_seed, 0.05)
+		_los_ok = _ray_los(p)
+	# ¿atacar? (no a través de muros; los jefes y las invocaciones no necesitan línea de visión)
 	if _gate <= 0.0:
 		var name := _pick_attack(dist)
 		if name != "":
-			_begin_attack(name, p)
-			return
-	var behavior := String(def["behavior"])
+			if is_boss or _los_ok or String(EnemyDefs.ATTACKS[name]["shape"]) == "summon":
+				_begin_attack(name, p)
+				return
+	# --- ruta: punto de paso rodeando obstáculos (escalonado, no cada fotograma) ---
+	var target := p.global_position
+	var melee_slot := nav != null and (behavior == "melee") and not is_boss and dist < 10.0
+	if dist > 10.0:
+		_slot_ang = atan2(-to.z, -to.x) + _slot_off
+	elif melee_slot:
+		var sp := p.global_position + Vector3(cos(_slot_ang), 0, sin(_slot_ang)) * 1.5
+		if nav.walkable(sp, nav_cls) and dist > 2.2:
+			target = sp
+	if nav != null:
+		nav.request(nav_cls)
+		_wp_t -= delta
+		var near_wp := _wp != Vector3.INF and _wp_info == 1 and _flat_dir_to(_wp).length() > 0.0 and (_wp - global_position).length() < 0.7
+		if _wp_t <= 0.0 or near_wp:
+			_wp_t = 0.1 + fmod(_seed, 0.06)
+			var out := [0]
+			_wp = nav.waypoint(global_position, target, nav_cls, out)
+			_wp_info = int(out[0])
+	else:
+		_wp = Vector3.INF
+		_wp_info = 2
+	var approach := dir
+	if _wp != Vector3.INF and _wp_info in [0, 1]:
+		var wd := _flat_dir_to(_wp)
+		if wd != Vector3.ZERO:
+			approach = wd
+	var routing := _wp_info == 1                # el camino directo está bloqueado: seguir la ruta
 	var move := Vector3.ZERO
 	var spd := _speed_now()
 	match behavior:
 		"flank":
-			var k := clampf((dist - 3.0) / 7.0, 0.0, 1.0)
-			var off := sin(Time.get_ticks_msec() * 0.0025 + _seed) * 0.95 * k
-			move = dir.rotated(Vector3.UP, off)
+			if routing:
+				move = approach
+			else:
+				var k := clampf((dist - 3.0) / 7.0, 0.0, 1.0)
+				var off := sin(Time.get_ticks_msec() * 0.0025 + _seed) * 0.95 * k
+				move = approach.rotated(Vector3.UP, off)
 			if dist < 1.4:
 				move = Vector3.ZERO
 		"ranged":
 			var band: Array = def.get("band", [8.0, 13.0])
-			if dist < float(band[0]):
+			var b0 := float(band[0])
+			if (routing or not _los_ok) and dist > b0 * 0.6:
+				move = approach            # sin línea de tiro: avanzar por la ruta hasta tener una posición válida
+			elif dist < b0:
 				move = -dir.rotated(Vector3.UP, 0.4 * _strafe_dir)
 				spd *= 0.9
 			elif dist > float(band[1]):
-				move = dir
+				move = approach
 			else:
 				move = dir.rotated(Vector3.UP, PI * 0.5 * _strafe_dir) * 0.55
 				if randf() < 0.004:
 					_strafe_dir = -_strafe_dir
+			if nav != null and move != approach and not nav.free_ahead(global_position, move, 1.6, nav_cls):
+				_strafe_dir = -_strafe_dir
+				move = dir.rotated(Vector3.UP, PI * 0.5 * _strafe_dir) * 0.55
+				if not nav.free_ahead(global_position, move, 1.6, nav_cls):
+					move = approach if dist > b0 * 0.6 else Vector3.ZERO
 		"boss":
 			if dist > 7.5:
-				move = dir
+				move = approach
 			else:
 				move = dir.rotated(Vector3.UP, PI * 0.5 * _strafe_dir) * 0.6
 				if randf() < 0.006:
 					_strafe_dir = -_strafe_dir
+				if nav != null and not nav.free_ahead(global_position, move, 2.0, nav_cls):
+					_strafe_dir = -_strafe_dir
+					move = approach
 		_:
 			var stop := 1.5 * maxf(1.0, vscale * 0.9)
-			move = dir if dist > stop else Vector3.ZERO
-			if is_boss and dist < 5.0 and dist > stop:
+			if dist <= stop:
+				move = Vector3.ZERO
+			elif target != p.global_position and (target - global_position).length() < 0.5:
+				move = Vector3.ZERO         # ya está en su hueco alrededor del jugador
+			else:
+				move = approach
+			if is_boss and dist < 5.0 and dist > stop and not routing:
 				move = dir.rotated(Vector3.UP, 0.5 * _strafe_dir)
+	# desvío temporal del anti-atasco: manda sobre lo demás
+	if _detour_t > 0.0:
+		_detour_t -= delta
+		var dd := _flat_dir_to(_detour_pt)
+		if dd == Vector3.ZERO or (_detour_pt - global_position).length() < 0.4:
+			_detour_t = 0.0
+		else:
+			move = dd
 	move += _separation() * 0.8
 	if move.length() > 1.0:
 		move = move.normalized()
+	var intended := move.length()               # lo que QUIERE avanzar (antes de deslizarse): el anti-atasco mide contra esto
 	# esquivar paredes: si estamos bloqueados contra una pared, deslizar por la normal
 	if is_on_wall():
 		var n := get_wall_normal()
@@ -437,7 +562,104 @@ func _chase(delta: float, p: Player) -> void:
 		if n.length() > 0.01:
 			var slide := move.slide(n.normalized())
 			move = slide if slide.length() > 0.1 else n.normalized().rotated(Vector3.UP, PI * 0.5 * _strafe_dir)
+	_stuck_check(delta, intended > 0.25, spd, nav, dist, routing or (behavior != "ranged" and behavior != "boss" and dist > 2.0))
 	_move_toward_dir(move, spd, delta)
+
+
+## Anti-atasco: mide el avance real cada 0.25 s. Sin avance pese a querer moverse → escala:
+##  0.5 s recalcular ruta · 1.0 s punto alternativo · 2.0 s desvío a la celda libre más cercana y nuevo hueco · 4.0 s pequeño salto
+##  comprobado con test_move (nunca atraviesa geometría).
+func _stuck_check(delta: float, wants_move: bool, spd: float, nav: NavGrid, dist: float, approaching: bool) -> void:
+	_stk_acc += delta
+	if _stk_acc < 0.25:
+		return
+	var step_t := _stk_acc
+	var moved := Vector2(global_position.x - _stk_pos.x, global_position.z - _stk_pos.z).length()
+	_stk_pos = global_position
+	var expect := spd * step_t * 0.3
+	_stk_acc = 0.0
+	# progreso hacia el objetivo (deslizarse por una pared no cuenta): pasos de ruta si hay campo, metros si no
+	var mode := 0
+	var metric := dist
+	if nav != null and _wp_info == 1:
+		var dd := nav.dist_at(global_position, nav_cls)
+		if dd >= 0:
+			mode = 1
+			metric = float(dd)
+	if mode != _prog_mode:
+		_prog_mode = mode
+		_prog_best = metric
+		_prog_t = 0.0
+	elif approaching and wants_move:
+		if metric < _prog_best - (0.9 if mode == 1 else 0.4):
+			_prog_best = metric
+			_prog_t = 0.0
+		else:
+			_prog_t += step_t
+	else:
+		_prog_best = metric
+		_prog_t = 0.0
+	if wants_move and (moved < maxf(0.05, expect) or _prog_t >= 1.5) and _since_hit > 0.4:
+		_stuck_t += 0.25
+	else:
+		_stuck_t = maxf(0.0, _stuck_t - 0.5)
+		if _stuck_t <= 0.0:
+			_stuck_lvl = 0
+		return
+	if nav == null:
+		return
+	if _stuck_t >= 0.5 and fmod(_stuck_t, 1.0) < 0.26 and _stuck_t < 6.0:
+		if _stuck_lvl < 1:
+			_stuck_lvl = 1
+			nav_unstuck_count += 1
+		_wp_t = 0.0                                  # recalcular la ruta ya
+		nav.request(nav_cls)
+		nav.reprobe(get_world_3d().direct_space_state, global_position, 5)   # ¿hay algo que el mapa no conocía?
+	if _stuck_t >= 1.0 and _stuck_lvl < 2:
+		_stuck_lvl = 2
+		var alt := nav.alt_point(global_position, nav_cls, _strafe_dir)
+		if alt != Vector3.INF:
+			_detour_pt = alt
+			_detour_t = 1.2
+		_strafe_dir = -_strafe_dir
+	elif _stuck_t >= 2.0 and _stuck_lvl < 3:
+		_stuck_lvl = 3
+		var wk := nav.nearest_walkable(global_position, nav_cls)
+		if wk != Vector3.INF and (wk - global_position).length() > 0.3:
+			_detour_pt = wk
+			_detour_t = 1.0
+		else:
+			var alt2 := nav.alt_point(global_position, nav_cls, -_strafe_dir)
+			if alt2 != Vector3.INF:
+				_detour_pt = alt2
+				_detour_t = 1.2
+		_slot_off = -_slot_off
+	elif _stuck_t >= 4.0 and _stuck_lvl < 4:
+		_stuck_lvl = 4
+		_unstick_hop(nav)
+		_stuck_t = 2.0
+		_stuck_lvl = 2
+
+
+## Último recurso: desplazamiento corto (≤1.5 m) hacia donde la rejilla dice que se puede estar, solo si el motor confirma que no choca.
+func _unstick_hop(nav: NavGrid) -> void:
+	var cands: Array = []
+	var wk := nav.nearest_walkable(global_position, nav_cls)
+	if wk != Vector3.INF:
+		cands.append(wk - global_position)
+	var a0 := randf() * TAU
+	for k in 6:
+		cands.append(Vector3(cos(a0 + k * 1.047), 0, sin(a0 + k * 1.047)) * 1.2)
+	for v in cands:
+		var m: Vector3 = v
+		m.y = 0.0
+		m = m.limit_length(1.5)
+		if m.length() < 0.2:
+			continue
+		if not test_move(global_transform, m):
+			global_position += m
+			velocity = Vector3.ZERO
+			return
 
 
 # ------------------------------------------------------------------ ataques

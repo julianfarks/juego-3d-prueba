@@ -36,6 +36,13 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.10.0 — cámara ajustable y navegación fiable de los enemigos
+- **Cámara más lejos por defecto** (9,6 m, altura 1,7 m, inclinación 25°): se ve el terreno por delante y el abogado sigue siendo reconocible. La colisión de la cámara usa un barrido de esfera contra el mundo (capa `L_CAMERA`): nunca atraviesa muros ni sólidos, se acerca al instante si algo se interpone, recupera la distancia despacio y dentro de la arena se recorta al recinto (sin saltos al girar junto al borde).
+- **Ajustes → CÁMARA** (también desde la pausa): Distancia (5–16 m), Altura (1–3,2 m), Inclinación (15–55°), Sensibilidad horizontal y vertical, invertir eje vertical y Restablecer. Botones −/+ y deslizador (táctil y mando); efecto inmediato y se guarda (`cam_dist`, `cam_height`, `cam_pitch`, `cam_sens_x/y`, `cam_invert_y`).
+- **Navegación de enemigos** (`scripts/enemy/nav_grid.gd`): rejilla de 1 m por arena (suelo, pendiente, hueco libre para dos tamaños de enemigo, escalones físicos), campo de flujo desde el jugador repartido en ticks y punto de paso suavizado. Los ladrones rodean muros, cajas y plataformas (rampas incluidas), los de distancia buscan una posición con línea de tiro, los cuerpo a cuerpo se reparten alrededor del jugador y se mantienen las diferencias por tipo (corredor rápido, tanque lento).
+- **Anti-atasco** escalonado: sin avance real (medido contra lo que *quiere* avanzar, no tras deslizarse) → 0,5 s recalcula la ruta y reanaliza el entorno · 1 s punto alternativo · 2 s celda libre más cercana y otro hueco · 4 s pequeño desplazamiento comprobado con `test_move` (nunca atraviesa geometría).
+- Pruebas: `--cameratest --stage=1|2` y `--navtest [--only=map,wall,u,zig,group,ranged,stuck,platform,biomes,perf]`.
+
 ## Novedades 0.9.0 — el juego abre directamente en el Vestíbulo del Bufete
 - **Arranque**: `scenes/main.tscn` → `main.gd` construye el mundo y llama a `_enter_lobby(true)`: la primera pantalla jugable es la escena 3D real del vestíbulo (aparición en `Lobby.spawn_position()`, cámara detrás del personaje). Se eliminó el menú inicial (`MainMenu`, el escenario del personaje sobre la plataforma y el estado `MENU`).
 - **Dónde está ahora cada función del antiguo menú**: NUEVA PARTIDA y CONTINUAR PARTIDA → portales del vestíbulo (y «CONTINUAR PARTIDA GUARDADA» en la pausa del vestíbulo; al abrir con un guardado el vestíbulo lo avisa); El Despacho y Récords → estaciones del vestíbulo y botones de la pausa; Ajustes → pausa; Salir (solo PC) → pausa del vestíbulo.

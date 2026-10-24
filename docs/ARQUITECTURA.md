@@ -4,7 +4,8 @@
 - `scripts/core/` — `UpgradeDB` (52 mejoras, 12 categorías, 4 rarezas, 10 sinergias), `Build` (estadísticas calculadas), `Scaling` (dificultad centralizada).
 - `scripts/gen/` — arte procedural: `MeshBuilder`, `Mats` (shader toon), `Rig` (esqueleto + animación por código), `ModelFactory` (abogado y enemigos), `PropsFactory` (obstáculos, plataformas, cofre, portal, tienda), `FX` (pool de efectos).
 - `scripts/combat/` — `Combat` (daño, críticos, procs, explosiones, cadenas), `Projectiles` (pool, sin físicas), `Feedback` (único punto de número flotante + sonido por impacto real: formato, estilos, prioridades, combos).
-- `scripts/player/` — `Player`, `Skills`, `CameraRig` (órbita, colisión de cámara sin tirones).
+- `scripts/player/` — `Player`, `Skills`, `CameraRig` (órbita, barrido de esfera contra el mundo, ajustes `Config.CAM_*`).
+- `scripts/enemy/nav_grid.gd` — `NavGrid`: rejilla de transitabilidad + campo de flujo (BFS por ticks) + puntos de paso; lo crea `ArenaManager.start()` y lo consulta `Enemy._chase`.
 - `scripts/enemy/` — `EnemyDefs` (datos), `Enemy` (máquina de estados, ataques telegrafiados, jefe por fases, estados alterados).
 - `scripts/arena/` — `BiomeDB` (6 biomas, datos), `Terrain` (relieve + colisión), `BiomeScenery` (cielo, muros, edificios, fondo en capas), `BiomeProps` (props/tienda/cofre por bioma), `ArenaBuilder` (orden: reservar huecos → terreno → muros/fondo → colocar sobre el suelo), `WaveDirector`, `Arena` (objetivos, oleadas, monedas, cofre/portal/tienda), `Interactable`.
 - `scripts/core/pad_input.gd` — `PadInput`: mandos (detección, dispositivo activo, modo táctil/mando, enlaces guardados, sticks con zona muerta). `scripts/ui/pad_nav.gd` — foco y B/cancelar en menús. `scripts/ui/controls_menu.gd` — Ajustes → CONTROLES.

@@ -50,6 +50,7 @@ var _cleared_t := 0.0
 var _boss_dead_t := -1.0
 var _coin_sfx_t := 0.0
 var chest_taken := false
+var nav: NavGrid = null                # navegación de enemigos (rejilla + campo de flujo), ver NavGrid
 var seed_used := 0                     # semilla de esta arena (se guarda para reconstruirla al cargar)
 
 
@@ -95,6 +96,7 @@ func start(idx: int, seed_value := -1) -> Vector3:
 	circles = data["circles"]
 	half = data["half"]
 	pal = data["pal"]
+	nav = NavGrid.new(half)
 	_plan = WaveDirector.plan(kind, idx, rng)
 	_wave_i = -1
 	_queue.clear()
@@ -123,6 +125,7 @@ func _announce() -> void:
 
 
 func _teardown() -> void:
+	nav = null
 	phase = Phase.IDLE
 	_plan = {}
 	_survival_left = 0.0
@@ -161,6 +164,10 @@ func _teardown() -> void:
 
 # ------------------------------------------------------------------ bucle principal
 func _physics_process(delta: float) -> void:
+	if nav != null:
+		var pl = GameState.player
+		var has_p: bool = pl != null and is_instance_valid(pl) and pl.alive
+		nav.tick(delta, get_world_3d().direct_space_state, pl.global_position if has_p else Vector3.ZERO, has_p)
 	_update_coins(delta)
 	_update_hazards(delta)
 	if _portal != null and not _portal_vis.is_empty():

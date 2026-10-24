@@ -4,6 +4,7 @@ extends Control
 ##   "game"  – AJUSTES: cámara, números de daño, vibración, acceso a CONTROLES y (oculto) modo desarrollador.
 ##   "video" – VÍDEO Y GRÁFICOS: calidad, sombras, distancia de dibujado, efectos, escala de render y límite de FPS.
 ##   "audio" – AUDIO: música y efectos por separado.
+##   "camera" – CÁMARA: distancia, altura, inclinación, sensibilidad H/V e inversión del eje vertical (panel lateral para ver el efecto).
 ## Todos los valores se aplican al instante y se guardan en la partida (persisten entre sesiones).
 
 signal closed
@@ -11,7 +12,7 @@ signal edit_controls_requested
 
 const DEV_HASH := "cc22eeb5148b1958e6a9999e4f76bbaf152c7a81079d9218164199d9e2b46d2d"
 const AUDIO_DEFAULTS := {"music": 0.7, "sfx": 0.9, "combat_sfx": 0.85, "ambient": 0.6}
-const TITLES := {"game": "AJUSTES", "video": "VÍDEO Y GRÁFICOS", "audio": "AUDIO"}
+const TITLES := {"game": "AJUSTES", "video": "VÍDEO Y GRÁFICOS", "audio": "AUDIO", "camera": "CÁMARA"}
 
 var page := "game"
 var _taps := 0
@@ -29,8 +30,31 @@ signal dev_tools_requested
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(UIKit.dim_background(0.85))
-	var v := UIKit.center_box(self, Vector2(900, 620))
+	var is_cam := page == "camera"
+	add_child(UIKit.dim_background(0.0 if is_cam else 0.85))
+	var v: VBoxContainer
+	if is_cam:
+		# panel a un lado y sin oscurecer la escena: se ve al personaje mientras se ajusta
+		var row := HBoxContainer.new()
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(row)
+		var gap := Control.new()
+		gap.custom_minimum_size = Vector2(16, 0)
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(gap)
+		var pnl := UIKit.panel(Vector2(560, 0))
+		pnl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pnl.modulate = Color(1, 1, 1, 0.94)
+		row.add_child(pnl)
+		v = VBoxContainer.new()
+		pnl.add_child(v)
+		var rest := Control.new()
+		rest.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(rest)
+	else:
+		v = UIKit.center_box(self, Vector2(900, 620))
 	var head := HBoxContainer.new()
 	v.add_child(head)
 	var t := UIKit.label(String(TITLES.get(page, "AJUSTES")), 42, UIKit.ACCENT)
@@ -45,7 +69,7 @@ func _ready() -> void:
 		queue_free())
 	head.add_child(close)
 	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(860, 520)
+	sc.custom_minimum_size = Vector2(520, 470) if is_cam else Vector2(860, 520)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(sc)
 	_vbox = VBoxContainer.new()
@@ -57,6 +81,8 @@ func _ready() -> void:
 			_build_video()
 		"audio":
 			_build_audio()
+		"camera":
+			_build_camera()
 		_:
 			_build_game()
 
@@ -103,9 +129,66 @@ func _build_video() -> void:
 	_sync()
 
 
+func _build_camera() -> void:
+	_vbox.add_theme_constant_override("separation", 8)
+	_cam_row("Distancia", "cam_dist", Config.CAM_DIST, 0.4, "%.1f m", "Acercar", "Alejar")
+	_cam_row("Altura", "cam_height", Config.CAM_HEIGHT, 0.1, "%.1f m", "Bajar", "Subir")
+	_cam_row("Inclinación", "cam_pitch", Config.CAM_PITCH, 2.0, "%d°", "Más plana", "Más picada")
+	_cam_row("Sensibilidad horizontal", "cam_sens_x", Config.CAM_SENS, 0.1, "%d%%", "", "", true)
+	_cam_row("Sensibilidad vertical", "cam_sens_y", Config.CAM_SENS, 0.1, "%d%%", "", "", true)
+	_toggle("Invertir eje vertical", "cam_invert_y")
+	_vbox.add_child(UIKit.label("Los cambios se ven al instante. Con mando: ◄ ► en el deslizador.", 17, UIKit.TEXT_DIM))
+	var rb := UIKit.button("Restablecer cámara", Vector2(360, 56), 22)
+	rb.name = "ResetCamera"
+	rb.pressed.connect(func():
+		Config.reset_camera()
+		_sync())
+	_vbox.add_child(rb)
+
+
+## Fila de ajuste de cámara: etiqueta, deslizador con límites y botones − / + (acercar/alejar, bajar/subir…).
+func _cam_row(label: String, key: String, lim: Dictionary, step: float, fmt: String, minus_tip: String, plus_tip: String, pct := false) -> void:
+	var box := VBoxContainer.new()
+	_vbox.add_child(box)
+	var top := HBoxContainer.new()
+	box.add_child(top)
+	var l := UIKit.label(label, 22)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(l)
+	var val := UIKit.label("", 22, UIKit.ACCENT, HORIZONTAL_ALIGNMENT_RIGHT)
+	top.add_child(val)
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	var minus := UIKit.button("−", Vector2(64, 52), 28)
+	minus.name = "Cam_%s_minus" % key
+	row.add_child(minus)
+	var s := HSlider.new()
+	s.min_value = float(lim["min"])
+	s.max_value = float(lim["max"])
+	s.step = step * 0.5
+	s.name = "Slider_" + key
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	s.custom_minimum_size = Vector2(300, 44)
+	row.add_child(s)
+	var plus := UIKit.button("+", Vector2(64, 52), 28)
+	plus.name = "Cam_%s_plus" % key
+	row.add_child(plus)
+	var show := func(x: float):
+		val.text = (fmt % int(round(x * 100.0))) if pct else (fmt % (int(round(x)) if fmt.contains("d") else x))
+	s.value = float(SaveSystem.setting(key))
+	show.call(s.value)
+	s.value_changed.connect(func(x):
+		SaveSystem.set_setting(key, x)
+		show.call(x)
+		Config.apply_camera())
+	minus.pressed.connect(func(): s.value = clampf(s.value - step, s.min_value, s.max_value))
+	plus.pressed.connect(func(): s.value = clampf(s.value + step, s.min_value, s.max_value))
+	_sliders.append({"key": key, "slider": s, "val": val, "pct": pct, "fmt": fmt})
+
+
 func _build_game() -> void:
 	_section("Juego")
-	_slider("Sensibilidad de cámara", "camera_sens", 0.3, 2.5, 0.05)
 	_toggle("Números de daño", "damage_numbers")
 	_slider("Tamaño de los números", "number_size", 0.6, 1.6, 0.05, true)
 	_toggle("Vibración", "vibration")
@@ -150,7 +233,11 @@ func _sync() -> void:
 	for sl in _sliders:
 		var x := float(SaveSystem.setting(sl["key"]))
 		(sl["slider"] as HSlider).set_value_no_signal(x)
-		(sl["val"] as Label).text = ("%d%%" % int(round(x * 100.0))) if sl["pct"] else "%.2f" % x
+		if sl.has("fmt"):
+			var f: String = sl["fmt"]
+			(sl["val"] as Label).text = (f % int(round(x * 100.0))) if sl["pct"] else (f % (int(round(x)) if f.contains("d") else x))
+		else:
+			(sl["val"] as Label).text = ("%d%%" % int(round(x * 100.0))) if sl["pct"] else "%.2f" % x
 	if _preset_note != null:
 		_preset_note.text = "" if Config.preset_matches() else "Personalizado: has cambiado ajustes sueltos respecto al preset."
 

@@ -6,7 +6,7 @@ extends Control
 ## Cada botón tiene nombre "Pause_<id>" para poder probarlos y navegarlos con el mando.
 
 signal resume_pressed
-signal settings_pressed(page: String)     # "game" | "video" | "audio"
+signal settings_pressed(page: String)     # "game" | "video" | "audio" | "camera"
 signal controls_pressed
 signal inventory_pressed
 signal save_pressed
@@ -68,6 +68,7 @@ func _ready() -> void:
 	_add("video", "VÍDEO Y GRÁFICOS", func(): settings_pressed.emit("video"))
 	_add("audio", "AUDIO", func(): settings_pressed.emit("audio"))
 	_add("controls", "CONTROLES", func(): controls_pressed.emit())
+	_add("camera", "CÁMARA", func(): settings_pressed.emit("camera"))
 	if context == "run":
 		_add("leave", "VOLVER AL VESTÍBULO", _confirm_leave)
 	elif OS.has_feature("pc") and not OS.has_feature("android"):

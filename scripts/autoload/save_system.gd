@@ -45,7 +45,13 @@ func defaults() -> Dictionary:
 			"fx_level": 1,         # efectos: 0 reducidos, 1 normales, 2 completos
 			"render_scale": 0.85,  # escala de renderizado 3D (0.5–1.0)
 			"fps": 60,
-			"camera_sens": 1.0,
+			"camera_sens": 1.0,    # antiguo (antes de 0.10): solo se usa para migrar a cam_sens_x/y
+			"cam_dist": 9.6,       # distancia de la cámara al personaje (m)
+			"cam_height": 1.7,     # altura del punto que sigue la cámara (m)
+			"cam_pitch": 25.0,     # inclinación hacia abajo (grados)
+			"cam_sens_x": 1.0,     # sensibilidad horizontal
+			"cam_sens_y": 1.0,     # sensibilidad vertical
+			"cam_invert_y": false, # invertir el eje vertical
 			"joy_zone": 1.0,       # tamaño de la zona donde puede nacer el joystick (0.6–1.4)
 			"joy_sens": 1.0,       # sensibilidad del joystick táctil (0.5–1.8)
 			"vibration": true,
@@ -125,6 +131,10 @@ func load_data() -> void:
 		var qi := clampi(int((ps as Dictionary).get("quality", 1)), 0, Config.QUALITY.size() - 1)
 		for k in Config.GFX_KEYS:
 			(ps as Dictionary)[k] = Config.QUALITY[qi][k]
+	# v0.10.0: la sensibilidad de cámara pasa a ser horizontal y vertical; se parte de la antigua
+	if typeof(ps) == TYPE_DICTIONARY and not (ps as Dictionary).has("cam_sens_x") and (ps as Dictionary).has("camera_sens"):
+		(ps as Dictionary)["cam_sens_x"] = (ps as Dictionary)["camera_sens"]
+		(ps as Dictionary)["cam_sens_y"] = (ps as Dictionary)["camera_sens"]
 	data = _merge(defaults(), parsed)
 	data["version"] = SAVE_VERSION
 	_sanitize_after_load()

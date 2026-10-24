@@ -141,7 +141,8 @@ static func wall_colliders(half: float) -> Array:
 		[Vector3(thick, hgt, half * 2.0), Vector3(e + thick * 0.5, hgt * 0.5 - 2.0, 0)],
 	]
 	for d in defs:
-		var sb := PropsFactory.static_body(d[0], d[1])
+		# solo capa de mundo: la cámara NO choca con el perímetro (se mantiene dentro de la arena por recorte continuo, ver CameraRig)
+		var sb := PropsFactory.static_body(d[0], d[1], Config.L_WORLD)
 		sb.name = "WallCollider"
 		out.append(sb)
 	return out

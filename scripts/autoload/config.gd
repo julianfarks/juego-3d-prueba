@@ -4,7 +4,7 @@ extends Node
 ## cada enemigo individualmente.
 
 const GAME_NAME := "LAWYER MAYHEM 3D"
-const VERSION := "0.9.0"
+const VERSION := "0.10.0"
 
 # Capas de física (máscaras de bits)
 const L_WORLD := 1
@@ -87,6 +87,31 @@ const FX_LEVELS := [
 ]
 const RENDER_SCALES := [0.5, 0.67, 0.85, 1.0]
 const GFX_KEYS := ["shadow_q", "draw_dist", "fx_level", "render_scale"]
+
+# --- Cámara -------------------------------------------------------------------
+## Límites razonables: nunca atraviesa al personaje, no se aleja tanto que no se vea, ni queda en un ángulo injugable.
+const CAM_DIST := {"min": 5.0, "max": 16.0, "def": 9.6}
+const CAM_HEIGHT := {"min": 1.0, "max": 3.2, "def": 1.7}
+const CAM_PITCH := {"min": 15.0, "max": 55.0, "def": 25.0}      # grados de inclinación hacia abajo
+const CAM_SENS := {"min": 0.3, "max": 2.5, "def": 1.0}
+const CAM_KEYS := ["cam_dist", "cam_height", "cam_pitch", "cam_sens_x", "cam_sens_y", "cam_invert_y"]
+
+
+func reset_camera() -> void:
+	SaveSystem.set_setting("cam_dist", CAM_DIST["def"])
+	SaveSystem.set_setting("cam_height", CAM_HEIGHT["def"])
+	SaveSystem.set_setting("cam_pitch", CAM_PITCH["def"])
+	SaveSystem.set_setting("cam_sens_x", CAM_SENS["def"])
+	SaveSystem.set_setting("cam_sens_y", CAM_SENS["def"])
+	SaveSystem.set_setting("cam_invert_y", false)
+	apply_camera()
+
+
+## Aplica al instante la cámara guardada (distancia, altura e inclinación; la sensibilidad se lee en cada fotograma).
+func apply_camera() -> void:
+	if GameState.cam != null and is_instance_valid(GameState.cam):
+		GameState.cam.apply_settings()
+
 
 # --- Economía ---------------------------------------------------------------
 const ECONOMY := {

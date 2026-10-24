@@ -103,6 +103,22 @@ func _ready() -> void:
 			add_child(bmn)
 			bmn.set("main", self)
 		return
+	if Config.cmd_flag("--cameratest"):
+		# observa el arranque normal (Vestíbulo) y luego entra en una partida
+		var cmt := load("res://tests/cameratest.gd")
+		if cmt != null:
+			var cmn: Node = cmt.new()
+			cmn.name = "CameraTest"
+			add_child(cmn)
+			cmn.set("main", self)
+	if Config.cmd_flag("--navtest"):
+		var nvt := load("res://tests/navtest.gd")
+		if nvt != null:
+			var nvn: Node = nvt.new()
+			nvn.name = "NavTest"
+			add_child(nvn)
+			nvn.set("main", self)
+		return
 	if Config.cmd_flag("--fbtest"):
 		var bt := load("res://tests/fbtest.gd")
 		if bt != null:
@@ -290,6 +306,13 @@ func _open_settings(page := "game") -> void:
 	s.page = page
 	s.edit_controls_requested.connect(_begin_edit_controls)
 	s.dev_tools_requested.connect(_open_dev_tools)
+	if page == "camera" and _pause_menu != null and is_instance_valid(_pause_menu):
+		# la página CÁMARA deja ver la escena para comprobar los cambios al instante: se oculta la pausa mientras tanto
+		var pm := _pause_menu
+		pm.visible = false
+		s.tree_exited.connect(func():
+			if is_instance_valid(pm):
+				pm.visible = true)
 	_open_overlay(s)
 
 
@@ -359,15 +382,15 @@ func _enter_lobby(instant := false) -> void:
 	lobby.station_activated.connect(_on_station)
 	arena.practice_targets = lobby.dummies
 	state = St.LOBBY
+	if _zoom_tw != null and _zoom_tw.is_valid():
+		_zoom_tw.kill()
 	player.visible = true
 	GameState.prepare_practice()
 	player.teleport_to(lobby.spawn_position())
 	player.iframes = 1.0
 	cam.target = player
-	cam.distance = 6.4
-	cam.pivot_height = 1.55
+	cam.apply_settings()
 	cam.shoulder = 0.55
-	cam.pitch = -0.4
 	cam.yaw = 0.0
 	cam.snap_to_target()
 	hud.visible = true
@@ -491,8 +514,10 @@ func _go_to_run(resume: Dictionary) -> void:
 		GameState.toast_msg("¡A los tribunales!" if resume.is_empty() else "Retomando tu partida…", Color(0.8, 0.7, 1.0))
 		if GameState.fx != null and player != null:
 			GameState.fx.flash_sphere(player.global_position + Vector3(0, 1.0, 0), 2.4, Color(0.7, 0.55, 1.0, 0.8), 0.4)
-		var ztw := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-		ztw.tween_property(cam, "distance", 2.6, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		if _zoom_tw != null and _zoom_tw.is_valid():
+			_zoom_tw.kill()
+		_zoom_tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_zoom_tw.tween_property(cam, "distance", 2.6, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await _fade_to(1.0, 0.3)
 	_cleanup_lobby()
 	_start_run(resume)
@@ -510,11 +535,11 @@ func _start_run(resume: Dictionary = {}) -> void:
 		SaveSystem.clear_run()      # una partida nueva sustituye a la guardada (el menú ya avisó)
 		GameState.start_run()
 	state = St.RUN
+	if _zoom_tw != null and _zoom_tw.is_valid():
+		_zoom_tw.kill()          # el zoom del portal del vestíbulo no debe pisar la distancia elegida por el jugador
 	cam.target = player
-	cam.distance = 6.4
-	cam.pivot_height = 1.55
+	cam.apply_settings()
 	cam.shoulder = 0.55
-	cam.pitch = -0.42
 	player.visible = true
 	player.reset_for_run()
 	if restoring:
@@ -533,6 +558,7 @@ func _region_changed(idx: int) -> bool:
 
 
 var _bars: Array = []
+var _zoom_tw: Tween
 
 
 ## Cubre la pantalla con la transición propia del bioma al que se entra (varía: fundido, destello, barras, polvo, iris).
