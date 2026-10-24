@@ -36,6 +36,12 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.10.1 — tienda deslizable, relanzamientos de tienda y cofres sin relanzar
+- **Tienda**: toda la lista se desliza con el dedo (también si el gesto empieza sobre una carta o un botón de compra), con inercia; un gesto que supera el umbral es un desplazamiento y nunca compra (comprar exige pulsación corta + confirmación). Cabecera, dinero y botones inferiores fijos; margen final para que la última oferta quede completa.
+- **RELANZAR OFERTAS** (máx. 3 por visita): «RELANZAR (20 $) — 1/3», precio 20 $ ×1,5 por uso (reducido por «Relanzamiento Barato»), confirmación con precio, sin saldo no cobra, al 3.º se desactiva («RELANZAMIENTOS AGOTADOS»). La visita = una arena: cerrar y reabrir la tienda conserva ofertas y contador; la arena siguiente lo reinicia (`Main._shop_visit`).
+- **Cofres**: eliminado el botón y la lógica de relanzar (incluido el relanzamiento gratis tras vender en el inventario). Siguen cartas, selección, Descartar e INVENTARIO.
+- Prueba: `--shoptest`.
+
 ## Novedades 0.10.0 — cámara ajustable y navegación fiable de los enemigos
 - **Cámara más lejos por defecto** (9,6 m, altura 1,7 m, inclinación 25°): se ve el terreno por delante y el abogado sigue siendo reconocible. La colisión de la cámara usa un barrido de esfera contra el mundo (capa `L_CAMERA`): nunca atraviesa muros ni sólidos, se acerca al instante si algo se interpone, recupera la distancia despacio y dentro de la arena se recorta al recinto (sin saltos al girar junto al borde).
 - **Ajustes → CÁMARA** (también desde la pausa): Distancia (5–16 m), Altura (1–3,2 m), Inclinación (15–55°), Sensibilidad horizontal y vertical, invertir eje vertical y Restablecer. Botones −/+ y deslizador (táctil y mando); efecto inmediato y se guarda (`cam_dist`, `cam_height`, `cam_pitch`, `cam_sens_x/y`, `cam_invert_y`).
