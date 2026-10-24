@@ -9,7 +9,8 @@ con la canción original del juego.
 | Archivo | Formato |
 |---|---|
 | `LawyerMayhem3D_trailer_16x9_1080p.mp4` | 16:9, 1920×1080, 30 fps |
-| `LawyerMayhem3D_trailer_9x16_1080x1920.mp4` | 9:16 (Shorts/Reels/TikTok), 1080×1920, 30 fps |
+| `LawyerMayhem3D_trailer_16x9_1080p_EN.mp4` | Versión en inglés del 16:9 (rótulos del tráiler traducidos; la interfaz del juego que aparece en pantalla sigue en español) |
+| `LawyerMayhem3D_trailer_9x16_1080x1920.mp4` | 9:16 (Shorts/Reels/TikTok), 1080×1920, 30 fps — **pendiente de renderizar** |
 
 ## Estructura del montaje
 
@@ -35,6 +36,7 @@ Requisitos: Godot 4.3, `xvfb-run`, `ffmpeg`, Python 3.
 
 ```bash
 trailer/tools/render.sh horizontal      # 1080p 16:9
+trailer/tools/render.sh horizontal_en   # 1080p 16:9 en inglés (--lang=en)
 trailer/tools/render.sh vertical        # 1080x1920 9:16
 trailer/tools/render.sh preview         # 640x360 rápido
 # opcional: --only=story,action,logo
