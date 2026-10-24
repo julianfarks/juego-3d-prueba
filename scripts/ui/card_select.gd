@@ -142,6 +142,9 @@ func _rebuild() -> void:
 			sl.custom_minimum_size = Vector2(cw - 40.0, 0)
 			v.add_child(sl)
 		pc.gui_input.connect(_on_card_input.bind(i))
+		pc.set_meta("pad_card", true)           # enfocable con mando: el foco selecciona la carta, confirmar la elige
+		pc.focus_mode = Control.FOCUS_ALL if PadInput.pad_mode else Control.FOCUS_NONE
+		pc.focus_entered.connect(func(): if PadInput.pad_mode and _selected != i: _select(i))
 		_row.add_child(pc)
 		_card_nodes.append(pc)
 		# animación de entrada
@@ -153,6 +156,13 @@ func _rebuild() -> void:
 
 
 func _on_card_input(event: InputEvent, i: int) -> void:
+	if event.is_action_pressed("ui_accept") and not event.is_echo():
+		if _selected == i:
+			_on_confirm()
+		else:
+			_select(i)
+		accept_event()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_select(i)
 	elif event is InputEventScreenTouch and event.pressed:

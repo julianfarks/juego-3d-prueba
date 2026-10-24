@@ -31,6 +31,8 @@ var _banner_tw: Tween
 
 var _overlays: Array = []
 var _pause_menu: PauseMenu
+var pad: PadInput
+var pad_nav: PadNav
 var _transitioning := false
 var _victory_shown := false
 var _end_pending := false
@@ -45,6 +47,7 @@ func _ready() -> void:
 	Config.dev_mode = bool(SaveSystem.setting("dev_unlocked"))
 	_build_world()
 	_build_ui()
+	_build_pad()
 	Config.apply_graphics(get_viewport())
 	AudioManager.apply_volumes()
 	SaveSystem.notice.connect(notify)
@@ -80,6 +83,14 @@ func _ready() -> void:
 			cnode.name = "CaseTest"
 			add_child(cnode)
 			cnode.set("main", self)
+		return
+	if Config.cmd_flag("--padtest"):
+		var pdt := load("res://tests/padtest.gd")
+		if pdt != null:
+			var pdn: Node = pdt.new()
+			pdn.name = "PadTest"
+			add_child(pdn)
+			pdn.set("main", self)
 		return
 	if Config.cmd_flag("--controltest"):
 		var cot := load("res://tests/controltest.gd")
@@ -170,6 +181,7 @@ func _build_ui() -> void:
 	touch = TouchControls.new()
 	touch.visible = false
 	theme_root.add_child(touch)
+	touch.blockers = hud.ui_blockers()
 	overlay_layer = CanvasLayer.new()
 	overlay_layer.layer = 20
 	overlay_layer.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -923,7 +935,42 @@ func _resume() -> void:
 	_pause_menu = null
 
 
+## Mandos: detección, modo de control (táctil ↔ mando) y navegación de menús.
+func _build_pad() -> void:
+	pad = PadInput.new()
+	pad.name = "PadInput"
+	add_child(pad)
+	pad_nav = PadNav.new()
+	pad_nav.name = "PadNav"
+	pad_nav.main = self
+	add_child(pad_nav)
+	pad.mode_changed.connect(_on_pad_mode)
+	pad.bindings_changed.connect(hud.refresh_pad_hints)
+	pad.devices_changed.connect(hud.refresh_pad_hints)
+	_on_pad_mode(PadInput.pad_mode)
+
+
+func _on_pad_mode(on: bool) -> void:
+	# con mando: fuera los controles táctiles (joystick y botones) para aprovechar toda la pantalla
+	touch.set_suppressed(on)
+	hud.refresh_pad_hints()
+	if on and state == St.RUN and hud.visible:
+		GameState.toast_msg("Modo mando: controles táctiles ocultos", UIKit.GOOD)
+	elif not on and state == St.RUN and hud.visible:
+		GameState.toast_msg("Controles táctiles activados", UIKit.GOOD)
+
+
 func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("inventory") and not event.is_echo() and state == St.RUN and not _transitioning:
+		var open_inv: Control = null
+		for o in _overlays:
+			if o is InventoryUI:
+				open_inv = o
+		if open_inv != null:
+			open_inv.call("_close")
+		else:
+			_open_inventory()
+		return
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
 

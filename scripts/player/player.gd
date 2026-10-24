@@ -157,7 +157,12 @@ func move_speed() -> float:
 
 
 func _input_vector() -> Vector2:
-	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var v := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if PadInput.inst != null:
+		var pv := PadInput.inst.move_vector()
+		if pv.length() > 0.01:
+			return pv
+	return v
 
 
 func _physics_process(delta: float) -> void:

@@ -42,6 +42,8 @@ func defaults() -> Dictionary:
 			"quality": 1,          # 0 baja, 1 media, 2 alta
 			"fps": 60,
 			"camera_sens": 1.0,
+			"joy_zone": 1.0,       # tamaño de la zona donde puede nacer el joystick (0.6–1.4)
+			"joy_sens": 1.0,       # sensibilidad del joystick táctil (0.5–1.8)
 			"vibration": true,
 			"show_fps": false,
 			"damage_numbers": true,
@@ -58,6 +60,15 @@ func defaults() -> Dictionary:
 			"dodge": {"x": 0.74, "y": 0.86, "scale": 0.95},
 			"interact": {"x": 0.50, "y": 0.62, "scale": 1.0},
 		},
+		"pad": {
+			"mode": "auto",          # auto = con mando conectado se ocultan los controles táctiles; "touch" o "pad" fuerzan uno
+			"bindings": {},          # acción -> {"t": "b"|"a"|"none", "i": índice}; vacío = valores por defecto
+			"move_stick": "left",    # stick que mueve (el otro gira la cámara)
+			"look_sens": 1.0,        # sensibilidad del stick de cámara
+			"dead_move": 0.2,        # zona muerta del stick de movimiento
+			"dead_look": 0.15,       # zona muerta del stick de cámara
+		},
+		"keys": {},                  # acción -> código físico de tecla (teclado); vacío = por defecto
 		"meta": {
 			"fees": 0,              # honorarios: moneda permanente
 			"perm": {},             # id -> nivel

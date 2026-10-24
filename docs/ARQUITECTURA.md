@@ -7,6 +7,7 @@
 - `scripts/player/` — `Player`, `Skills`, `CameraRig` (órbita, colisión de cámara sin tirones).
 - `scripts/enemy/` — `EnemyDefs` (datos), `Enemy` (máquina de estados, ataques telegrafiados, jefe por fases, estados alterados).
 - `scripts/arena/` — `BiomeDB` (6 biomas, datos), `Terrain` (relieve + colisión), `BiomeScenery` (cielo, muros, edificios, fondo en capas), `BiomeProps` (props/tienda/cofre por bioma), `ArenaBuilder` (orden: reservar huecos → terreno → muros/fondo → colocar sobre el suelo), `WaveDirector`, `Arena` (objetivos, oleadas, monedas, cofre/portal/tienda), `Interactable`.
+- `scripts/core/pad_input.gd` — `PadInput`: mandos (detección, dispositivo activo, modo táctil/mando, enlaces guardados, sticks con zona muerta). `scripts/ui/pad_nav.gd` — foco y B/cancelar en menús. `scripts/ui/controls_menu.gd` — Ajustes → CONTROLES.
 - `scripts/ui/` — HUD, controles táctiles editables, cartas, tienda, menús, ajustes, pantalla final, herramientas de desarrollo.
 - `scripts/main.gd` — orquestador del flujo. `tests/selftest.gd` — autojuego.
 

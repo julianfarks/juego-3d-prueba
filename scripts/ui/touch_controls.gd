@@ -17,6 +17,10 @@ const COLORS := {
 }
 const BASE_R := 54.0
 const JOY_R := 96.0
+const JOY_ZONE_X := 0.34       # el joystick solo nace en la parte inferior izquierda: x ≤ 34 % del ancho…
+const JOY_ZONE_TOP := 0.45     # …y por debajo del 45 % de la altura (valores a escala 1.0 de la opción «zona»)
+const CAM_X := 0.46            # la cámara se arrastra solo en la mitad derecha
+const JOY_DEAD := 0.12
 
 var edit_mode := false
 var selected := "attack"
@@ -31,6 +35,9 @@ var _slider: HSlider
 var _sel_label: Label
 var show_interact := false
 var _icons: Dictionary = {}
+var blockers: Array = []             # controles de la interfaz (inventario, pausa) que nunca deben iniciar movimiento ni cámara
+var last_event_pos := Vector2.ZERO    # (pruebas) última posición de toque recibida, en coordenadas del control
+var suppressed := false              # modo mando: los controles táctiles no capturan ni dibujan
 
 
 func _ready() -> void:
@@ -52,6 +59,36 @@ func _center(name: String) -> Vector2:
 
 func _radius(name: String) -> float:
 	return (BASE_R if name != "joystick" else JOY_R) * float(_layout(name)["scale"])
+
+
+## Zona (en coordenadas del control) donde puede nacer el joystick dinámico.
+func joy_zone() -> Rect2:
+	var zs := clampf(float(SaveSystem.setting("joy_zone")), 0.6, 1.4)
+	var w := minf(JOY_ZONE_X * zs, CAM_X - 0.02)
+	var top := clampf(1.0 - (1.0 - JOY_ZONE_TOP) * zs, 0.2, 0.9)
+	return Rect2(0.0, size.y * top, size.x * w, size.y * (1.0 - top))
+
+
+func in_joy_zone(pos: Vector2) -> bool:
+	if joy_zone().has_point(pos):
+		return true
+	# el joystick fijo configurado (aunque el jugador lo haya movido) siempre es válido
+	return pos.distance_to(_center("joystick")) <= _radius("joystick") * 1.3
+
+
+func _over_ui(pos: Vector2) -> bool:
+	for b in blockers:
+		if is_instance_valid(b) and (b as Control).is_visible_in_tree() and (b as Control).get_global_rect().grow(10.0).has_point(pos):
+			return true
+	return false
+
+
+func joy_active() -> bool:
+	return _joy_active
+
+
+func joy_vector() -> Vector2:
+	return _joy_vec
 
 
 func _process(_delta: float) -> void:
@@ -77,10 +114,11 @@ func _button_at(pos: Vector2) -> String:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or get_tree().paused and not edit_mode:
+	if not visible or (get_tree().paused and not edit_mode) or (suppressed and not edit_mode):
 		return
 	if event is InputEventScreenTouch:
 		var pos: Vector2 = event.position
+		last_event_pos = pos
 		if event.pressed:
 			_on_down(event.index, pos)
 		else:
@@ -105,14 +143,22 @@ func _on_down(idx: int, pos: Vector2) -> void:
 		_pointers[idx] = {"role": "button", "name": b}
 		_set_action(b, true)
 		return
-	if pos.x < size.x * 0.46 and pos.y > size.y * 0.22:
+	if _over_ui(pos):
+		return      # tocar el inventario o la pausa nunca mueve al personaje ni la cámara
+	if in_joy_zone(pos):
+		if _joy_active:
+			return  # ya hay un dedo en el joystick: otro toque no lo cambia
+		var r := JOY_R * float(_layout("joystick")["scale"])
 		_pointers[idx] = {"role": "joy"}
 		_joy_active = true
-		_joy_origin = pos
+		# la base nace bajo el pulgar pero siempre completa dentro de la pantalla
+		_joy_origin = Vector2(clampf(pos.x, r + 8.0, size.x - r - 8.0), clampf(pos.y, r + 8.0, size.y - r - 8.0))
 		_joy_pos = pos
-		_joy_vec = Vector2.ZERO
-	elif pos.x >= size.x * 0.46:
+		_joy_vec = ((pos - _joy_origin) / r).limit_length(1.0)
+		_apply_joy()
+	elif pos.x >= size.x * CAM_X:
 		_pointers[idx] = {"role": "cam"}
+	# cualquier otro punto de la izquierda queda fuera de las zonas de control: se ignora
 
 
 func _on_up(idx: int) -> void:
@@ -159,11 +205,15 @@ func _on_drag(idx: int, pos: Vector2, rel: Vector2) -> void:
 
 func _apply_joy() -> void:
 	var v := _joy_vec
-	var dead := 0.16
-	if v.length() < dead:
+	var len := v.length()
+	if len < JOY_DEAD:
 		v = Vector2.ZERO
 	else:
-		v = v.normalized() * clampf((v.length() - dead) / (1.0 - dead), 0.0, 1.0)
+		# curva suave al empezar y respuesta completa al empujar; la misma para todas las direcciones
+		# (la magnitud nunca supera 1, así que las diagonales no van más rápido)
+		var t := clampf((len - JOY_DEAD) / (0.88 - JOY_DEAD), 0.0, 1.0)     # velocidad máxima al 88 % del recorrido
+		var sens := clampf(float(SaveSystem.setting("joy_sens")), 0.5, 1.8)
+		v = v / len * clampf(pow(t, 1.15) * sens, 0.0, 1.0)
 	_set_axis("move_left", maxf(-v.x, 0.0))
 	_set_axis("move_right", maxf(v.x, 0.0))
 	_set_axis("move_forward", maxf(-v.y, 0.0))
@@ -183,6 +233,13 @@ func _set_action(name: String, down: bool) -> void:
 		Input.action_press(name)
 	else:
 		Input.action_release(name)
+
+
+func set_suppressed(on: bool) -> void:
+	suppressed = on
+	if on:
+		release_all()
+	queue_redraw()
 
 
 func release_all() -> void:
@@ -205,6 +262,13 @@ func _notification(what: int) -> void:
 
 # ------------------------------------------------------------------ dibujo
 func _draw() -> void:
+	if suppressed and not edit_mode:
+		return
+	# zona donde nace el joystick (muy tenue, solo mientras no se usa)
+	if not _joy_active:
+		var z := joy_zone()
+		draw_rect(z, Color(1, 1, 1, 0.025 if not edit_mode else 0.07), true)
+		draw_rect(z, Color(1, 1, 1, 0.07 if not edit_mode else 0.2), false, 2.0)
 	# joystick
 	var jr := _radius("joystick")
 	var jc := _center("joystick")
@@ -212,10 +276,12 @@ func _draw() -> void:
 	var knob := _joy_pos if _joy_active else jc
 	if _joy_active:
 		knob = base_c + _joy_vec.limit_length(1.0) * jr
-	draw_circle(base_c, jr, Color(1, 1, 1, 0.08))
-	draw_arc(base_c, jr, 0, TAU, 48, Color(1, 1, 1, 0.35 if _joy_active else 0.22), 3.0)
-	draw_circle(knob, jr * 0.42, Color(1, 1, 1, 0.38 if _joy_active else 0.2))
-	draw_arc(knob, jr * 0.42, 0, TAU, 32, Color(1, 1, 1, 0.6), 2.0)
+	draw_circle(base_c, jr, Color(0.0, 0.0, 0.0, 0.22))
+	draw_circle(base_c, jr, Color(1, 1, 1, 0.1))
+	draw_arc(base_c, jr, 0, TAU, 48, Color(1, 1, 1, 0.55 if _joy_active else 0.3), 3.5)
+	draw_circle(knob, jr * 0.46, Color(0.0, 0.0, 0.0, 0.3))
+	draw_circle(knob, jr * 0.42, Color(1, 1, 1, 0.55 if _joy_active else 0.28))
+	draw_arc(knob, jr * 0.42, 0, TAU, 32, Color(1, 1, 1, 0.85), 2.5)
 	if edit_mode and selected == "joystick":
 		draw_arc(jc, jr + 8.0, 0, TAU, 48, UIKit.ACCENT, 4.0)
 	# botones

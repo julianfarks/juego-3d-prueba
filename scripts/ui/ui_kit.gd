@@ -74,7 +74,7 @@ static func button(text: String, min_size := Vector2(280, 66), font_size := 26) 
 	b.text = text
 	b.custom_minimum_size = min_size
 	b.add_theme_font_size_override("font_size", font_size)
-	b.focus_mode = Control.FOCUS_NONE
+	b.focus_mode = Control.FOCUS_ALL if PadInput.pad_mode else Control.FOCUS_NONE
 	return b
 
 
@@ -115,6 +115,7 @@ static func dim_background(alpha := 0.7) -> ColorRect:
 	c.color = Color(0, 0, 0, alpha)
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
+	c.add_to_group("pad_dim")         # marca un panel modal: la navegación con mando se limita al más reciente
 	return c
 
 

@@ -21,6 +21,7 @@ var _boss_name: Label
 var _boss_bar: ProgressBar
 var _toasts: VBoxContainer
 var _prompt: Label
+var _pad_hints: Label
 var _power_label: Label
 var _inv_btn: Button
 var _power_bar: ProgressBar
@@ -129,6 +130,7 @@ func _build() -> void:
 	_boss_box.add_child(_boss_bar)
 	# --- derecha: pausa, fps, potencia ---
 	var pb := UIKit.button("II", Vector2(72, 72), 30)
+	pb.name = "PauseButton"
 	pb.pressed.connect(func(): pause_pressed.emit())
 	add_child(pb)
 	UIKit.place(pb, 1.0, 0.0, -92, 14, 72, 72)
@@ -163,6 +165,10 @@ func _build() -> void:
 	_prompt = UIKit.label("", 26, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER)
 	add_child(_prompt)
 	UIKit.place(_prompt, 0.5, 1.0, -300, -230, 600, 40)
+	_pad_hints = UIKit.label("", 19, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_pad_hints.visible = false
+	add_child(_pad_hints)
+	UIKit.place(_pad_hints, 0.5, 1.0, -560, -44, 1120, 30)
 	_banner = UIKit.title("", 64)
 	_banner.modulate.a = 0.0
 	add_child(_banner)
@@ -280,6 +286,16 @@ func _on_synergy(syn: Dictionary) -> void:
 	GameState.toast_msg(String(syn.get("desc", "")), Color(1.0, 0.95, 0.7))
 
 
+## Controles de la interfaz que no deben iniciar el joystick ni la cámara al tocarlos.
+func ui_blockers() -> Array:
+	var out: Array = []
+	for n in ["InventoryButton", "PauseButton"]:
+		var c := get_node_or_null(n)
+		if c != null:
+			out.append(c)
+	return out
+
+
 ## Icono de maletín dibujado por código (32x32).
 static func _briefcase_icon() -> ImageTexture:
 	var im := Image.create(32, 32, false, Image.FORMAT_RGBA8)
@@ -293,6 +309,17 @@ static func _briefcase_icon() -> ImageTexture:
 	im.fill_rect(Rect2i(4, 17, 24, 2), dark)       # banda
 	im.fill_rect(Rect2i(14, 15, 4, 6), Color(1.0, 0.85, 0.3))   # cierre
 	return ImageTexture.create_from_image(im)
+
+
+## Indicaciones de botones con los nombres del mando conectado (Xbox: RT/A/B… · PlayStation: R2/Cruz/Círculo…).
+func refresh_pad_hints() -> void:
+	_pad_hints.visible = PadInput.pad_mode
+	if not PadInput.pad_mode or PadInput.inst == null:
+		return
+	var parts: Array = []
+	for a in ["attack", "skill1", "dodge", "jump", "interact", "inventory"]:
+		parts.append("%s %s" % [PadInput.label(a), String(PadInput.ACTION_LABEL[a]).split(" (")[0]])
+	_pad_hints.text = "  ·  ".join(parts)
 
 
 func _refresh_build() -> void:
@@ -340,7 +367,10 @@ func _process(delta: float) -> void:
 	# prompt de interacción
 	var pl = GameState.player
 	if pl != null and pl.interact_target != null:
-		_prompt.text = "[ %s ]  %s" % [String(pl.interact_target.action_text), String(pl.interact_target.prompt)]
+		var key_txt := String(pl.interact_target.action_text)
+		if PadInput.pad_mode:
+			key_txt = PadInput.label("interact")      # nombre del botón según el mando (X / Cuadrado…)
+		_prompt.text = "[ %s ]  %s" % [key_txt, String(pl.interact_target.prompt)]
 	else:
 		_prompt.text = ""
 	# racha

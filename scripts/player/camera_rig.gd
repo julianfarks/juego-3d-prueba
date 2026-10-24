@@ -54,6 +54,8 @@ func _process(delta: float) -> void:
 	GameState.look_delta = Vector2.ZERO
 	var kb := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	look += kb * 900.0 * delta
+	if PadInput.inst != null:
+		look += PadInput.inst.look_vector() * 550.0 * delta      # stick de cámara del mando
 	yaw -= look.x * look_sens * sens
 	pitch = clampf(pitch - look.y * look_sens * 0.85 * sens, min_pitch, max_pitch)
 	# pivote suavizado

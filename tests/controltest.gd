@@ -65,6 +65,15 @@ func _joy(btn: int, down: bool) -> void:
 	await _frames(2)
 
 
+## Gatillo analógico del mando (RT = eje 5, LT = eje 4).
+func _trig(axis: int, down: bool) -> void:
+	var ev := InputEventJoypadMotion.new()
+	ev.axis = axis
+	ev.axis_value = 1.0 if down else 0.0
+	Input.parse_input_event(ev)
+	await _frames(2)
+
+
 func _wait_idle(max_s := 8.0) -> void:
 	var t := 0.0
 	while ct.in_flight() and t < max_s:
@@ -333,19 +342,19 @@ func _t6_gamepad() -> void:
 	await _secs(1.0)
 	for k in ct.counts.keys():
 		ct.counts[k] = 0
-	ok(InputMap.action_get_events("attack").any(func(e): return e is InputEventJoypadButton), "K6.1 la acción ATACAR tiene botón de mando asignado")
+	ok(InputMap.action_get_events("attack").any(func(e): return e is InputEventJoypadMotion and e.axis == 5), "K6.1 la acción ATACAR tiene el gatillo RT asignado")
 	await _secs(3.0)
 	ok(_throws() == 0, "K6.2 con el mando conectado sin pulsar nada no se lanza nada (%d)" % _throws())
-	await _joy(JOY_BUTTON_X, true)
+	await _trig(5, true)
 	await _frames(3)
 	ok(_throws() == 1, "K6.3 el botón de ataque del mando lanza una vez (%d)" % _throws())
 	await _secs(4.0)
-	await _joy(JOY_BUTTON_X, false)
+	await _trig(5, false)
 	ok(_throws() == 1, "K6.4 mantenerlo pulsado no repite el lanzamiento (%d)" % _throws())
 	await _wait_idle()
 	player.skills.cd[0] = 0.0
-	await _joy(JOY_BUTTON_X, true)
-	await _joy(JOY_BUTTON_X, false)
+	await _trig(5, true)
+	await _trig(5, false)
 	await _frames(3)
 	ok(_throws() == 2, "K6.5 pulsar de nuevo tras recuperar el maletín lanza otra vez (%d)" % _throws())
 	await _wait_idle()
@@ -369,7 +378,7 @@ func _t6_gamepad() -> void:
 	ok(dodged, "K6.7 el botón de esquiva del mando esquiva")
 	player.skills.energy = player.skills.energy_max
 	player.skills.cd[1] = 0.0
-	await _joy(JOY_BUTTON_Y, true)
-	await _joy(JOY_BUTTON_Y, false)
+	await _trig(4, true)
+	await _trig(4, false)
 	ok(player.skills.cd[1] > 0.0, "K6.8 el botón DOCS del mando lanza DOCS")
 	ok(_throws() == 2, "K6.9 salto, esquiva y DOCS con mando no lanzaron el maletín (%d)" % _throws())

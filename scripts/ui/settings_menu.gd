@@ -55,20 +55,18 @@ func _ready() -> void:
 	_slider("Tamaño de los números", "number_size", 0.6, 1.6, 0.05, true)
 	_toggle("Reducir efectos con muchos impactos", "reduce_fx")
 	_toggle("Vibración", "vibration")
-	_section("Controles táctiles")
-	var row := HBoxContainer.new()
-	_vbox.add_child(row)
-	var edit := UIKit.button("Editar posición y tamaño", Vector2(380, 60), 22)
-	edit.pressed.connect(func():
-		edit_controls_requested.emit()
-		SaveSystem.save_now()
-		queue_free())
-	row.add_child(edit)
-	var rst := UIKit.button("Restablecer", Vector2(220, 60), 22)
-	rst.pressed.connect(func():
-		SaveSystem.reset_controls()
-		GameState.toast_msg("Controles restablecidos", UIKit.GOOD))
-	row.add_child(rst)
+	_section("Controles")
+	var crow := HBoxContainer.new()
+	_vbox.add_child(crow)
+	var cbtn := UIKit.accent_button("CONTROLES: táctil, mando y teclado", Vector2(520, 64), 24)
+	cbtn.name = "OpenControls"
+	cbtn.pressed.connect(func():
+		var cm := ControlsMenu.new()
+		cm.edit_controls_requested.connect(func():
+			edit_controls_requested.emit()
+			queue_free())
+		add_child(cm))
+	crow.add_child(cbtn)
 	_section("Acerca de")
 	var ver := UIKit.label("%s  v%s" % [Config.GAME_NAME, Config.VERSION], 20, UIKit.TEXT_DIM)
 	ver.mouse_filter = Control.MOUSE_FILTER_STOP
