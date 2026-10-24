@@ -211,12 +211,23 @@ func _run() -> void:
 			groups_ok = false
 	ok(enough, "B4.1 siempre salen 3 opciones de maletín")
 	ok(groups_ok, "B4.2 las 3 opciones son de grupos distintos (daño/efectos/economía/cadencia)")
+	# variación: con 'seen' no se repiten las opciones del jefe anterior
+	var seen_ids: Array = []
+	var c1 := UpgradeDB.boss_case_cards(b, 5, GameState.rng, 2, 0.0, seen_ids)
+	for c in c1:
+		seen_ids.append(c["id"])
+	var c2 := UpgradeDB.boss_case_cards(b, 10, GameState.rng, 2, 0.0, seen_ids)
+	var overlap := 0
+	for c in c2:
+		if seen_ids.has(c["id"]):
+			overlap += 1
+	ok(overlap == 0, "B4.2b el 2.º jefe no repite las opciones del 1.º")
 	ar.kind = Scaling.KIND_BOSS
 	var cards0: int = int(GameState.run_stats["cards"])
 	main._start_reward(2, true)
 	await _secs(0.8)
 	var cs := _find_cs()
-	ok(cs != null and cs.source == "boss_case" and cs._cards.size() == 3, "B4.3 al matar al jefe sale la elección de maletín con 3 cartas")
+	ok(cs != null and cs.source == "boss_case" and cs._cards.size() == 3, "B4.3 al matar al jefe sale el botín especial con 3 cartas")
 	await _shot("boss_reward")
 	if cs != null:
 		var pick_id: String = cs._cards[1]["id"]
@@ -224,14 +235,15 @@ func _run() -> void:
 		cs._selected = 1
 		cs._on_confirm()
 		await _secs(0.6)
-		ok(b.count_of(pick_id) == before + 1, "B4.4 elegir una carta de maletín la añade a la build")
-		var cs2 := _find_cs()
-		ok(cs2 != null and cs2.source == "chest", "B4.5 después viene la 2.ª recompensa normal del cofre del jefe")
-		if cs2 != null:
-			cs2._selected = 0
-			cs2._on_confirm()
-			await _secs(0.5)
-	ok(int(GameState.run_stats["cards"]) == cards0 + 2, "B4.6 el cofre de jefe da exactamente 2 elecciones")
+		ok(b.count_of(pick_id) >= before + 1, "B4.4 elegir una carta especial la añade a la build con nivel de regalo (+%d)" % (b.count_of(pick_id) - before))
+		for step in [1, 2]:
+			var csn := _find_cs()
+			ok(csn != null and csn.source == "chest", "B4.5.%d después vienen las recompensas NORMALES del cofre del jefe" % step)
+			if csn != null:
+				csn._selected = 0
+				csn._on_confirm()
+				await _secs(0.5)
+	ok(int(GameState.run_stats["cards"]) == cards0 + 3, "B4.6 el cofre de jefe da 1 elección especial + 2 normales (%d)" % (int(GameState.run_stats["cards"]) - cards0))
 	ar.kind = Scaling.KIND_ELIMINATION
 
 	# ---------------------------------------------------------------- 5. poderes con el tiempo

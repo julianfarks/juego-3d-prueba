@@ -19,7 +19,7 @@ const SHOP_GROUPS := {
 	"shop_case": "Ofensiva", "shop_pen": "Ofensiva", "shop_coffee": "Ofensiva",
 	"shop_shoes": "Movilidad", "shop_stamp": "Movilidad",
 	"shop_account": "Económica", "shop_wallet": "Económica", "shop_vip": "Económica",
-	"shop_insurance": "Curación",
+	"shop_insurance": "Curación", "shop_commission": "Económica", "shop_retainer": "Económica", "shop_invoice": "Económica",
 	"shop_contract": "Especial", "shop_key": "Especial", "shop_notary": "Especial",
 }
 
@@ -36,6 +36,12 @@ static func register() -> void:
 	UpgradeDB.add_def("law_caseload", "Carga de Casos", "dmg", "book", "+{v} de daño por cada 10 bajas de la partida (tope +60% por nivel acumulado)", {"law_caseload": 0.004}, "p", 8, ["tiempo", "racha"])
 	UpgradeDB.add_def("law_billable", "Horas Facturables", "gold", "coin", "Cada 20 s cobras {v} moneda(s) (crece con la arena; solo en combate)", {"law_bill": 1.0}, "i", 5, ["tiempo", "economia"])
 	UpgradeDB.add_def("law_seasoned", "Curtido en Sala", "hp", "heart", "Cada 10 s te curas {v} de tu salud máxima (solo en combate)", {"law_season": 0.006}, "p", 8, ["tiempo", "defensa"])
+	# ---- economía y supervivencia (Task K)
+	UpgradeDB.add_def("law_commission", "Comisión por Baja", "eco", "coin", "{v} de prob. de +1 moneda por cada enemigo derrotado", {"kill_coins": 0.07}, "p", 6, ["monedas"])
+	UpgradeDB.add_def("law_streak_fee", "Honorarios Rápidos", "eco", "gem", "Al derrotar 5 enemigos en 3 s cobras {v} moneda(s) (crece con la arena; máx. 6 pagos por ronda)", {"law_streak_pay": 3.0}, "i", 5, ["monedas", "racha"])
+	UpgradeDB.add_def("law_clean_boss", "Honorarios de Jefe Limpio", "eco", "crown", "Derrota a un jefe perdiendo ≤25% de salud máx.: +{v} monedas y curas 20%", {"law_clean": 1.0}, "i", 4, ["monedas", "vida"], {"flat": true})
+	UpgradeDB.add_def("law_leech", "Cobro por Impacto", "hp", "heart", "Cada golpe de un ataque secundario del maletín te cura {v} de tu salud máx. (límite: 1%/s)", {"law_leech": 0.003}, "q", 6, ["vida", "maletin"])
+	UpgradeDB.add_def("law_despacho_shield", "Escudo de Despacho", "shield", "badge", "Derrotar 4 enemigos en 4 s te da un escudo temporal de {v} de tu salud (8 s, enfr. 8 s)", {"law_mshield": 0.06}, "p", 6, ["escudo", "racha"])
 	UpgradeDB.add_def("law_sentence", "Sentencia Crítica", "crit", "target", "Prob. de golpe crítico +{v}", {"law_sent": 0.04}, "p", 10, ["critico"])
 	UpgradeDB.add_def("law_objection_chain", "Cadena de Objeciones", "streak", "chain", "Cada baja: +{v} de daño durante 5 s (acumulable hasta 8 veces)", {"law_obj": 0.015}, "p", 8, ["racha", "ataque"])
 	UpgradeDB.add_def("law_gavel_strike", "Mazo Judicial", "aoe", "gavel", "Cada pocos lanzamientos (7, menos con niveles) el mazo golpea a tu alrededor: {v} del daño base", {"law_gavel": 0.8}, "p", 6, ["maletin", "explosion"], {"req": {"arena": 2}})
@@ -71,6 +77,9 @@ static func register() -> void:
 	_shop("shop_insurance", "Seguro Premium", "hp", "heart", "Regeneras {v} de salud máx. por s y las curas son {w} más potentes", {"hp_regen_pct": 0.004, "heal_pow": 0.1}, "qp", 4, [0, 1, 2], ["vida"])
 	_shop("shop_contract", "Contrato Exclusivo", "legend", "crown", "Todo tu daño ×{v}", {"more_dmg_x": 0.12}, "m", 2, [2, 3], ["ataque"])
 	_shop("shop_key", "Llave del Archivo", "legend", "gem", "Los cofres ofrecen {v} carta(s) más para elegir", {"chest_cards": 1.0}, "i", 1, [1, 2], ["monedas"], true)
+	_shop("shop_commission", "Comisión de Cliente", "eco", "coin", "{v} de prob. de +1 moneda por baja y Honorarios Rápidos paga {w} más", {"kill_coins": 0.08, "law_streak_pay": 1.0}, "pi", 4, [0, 1, 2], ["monedas"])
+	_shop("shop_retainer", "Anticipo del Bufete", "eco", "gem", "Todas las monedas +{v} y los jefes limpios pagan +{w}", {"coin_pct": 0.06, "law_clean": 1.0}, "pi", 3, [1, 2], ["monedas"])
+	_shop("shop_invoice", "Factura Express", "eco", "star", "Al terminar cada zona ganas {v} de tus monedas y la tienda cuesta {w} menos", {"law_firm": 0.02, "shop_discount": 0.02}, "pp", 3, [1, 2], ["monedas"])
 	_shop("shop_notary", "Notario Personal", "legend", "gear", "Enfriamientos -{v} y habilidades ×{w} de daño", {"cdr": 0.05, "skill_dmg_x": 0.1}, "pm", 3, [2, 3], ["habilidad"])
 
 

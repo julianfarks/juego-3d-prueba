@@ -126,6 +126,13 @@ func _ready() -> void:
 			dfn.name = "DiffTest"
 			add_child(dfn)
 			dfn.set("main", self)
+	if Config.cmd_flag("--attacktest"):
+		var att_t := load("res://tests/attacktest.gd")
+		if att_t != null:
+			var atn: Node = att_t.new()
+			atn.name = "AttackTest"
+			add_child(atn)
+			atn.set("main", self)
 	if Config.cmd_flag("--bosstest"):
 		var bst_t := load("res://tests/bosstest.gd")
 		if bst_t != null:
@@ -798,13 +805,36 @@ func _on_bonus_chest_opened(min_rarity: int) -> void:
 ## Recompensas de UN cofre: 1 elección, o 2 si es de jefe o le toca «cofre doble» (50%). Nunca más de 2 por cofre:
 ## el doble no se acumula con el del jefe. La 2.ª tirada excluye lo ya elegido (sin duplicados accidentales).
 func _start_reward(min_rarity: int, boss: bool) -> void:
-	var total := 1
 	if boss:
-		total = 2
-	elif LawPerks.roll_double(LawPerks.roll()):
+		# BOTÍN ESPECIAL del jefe (sistema aparte): 3 opciones de categorías distintas; después, las 2 elecciones normales
+		_boss_special_pick(min_rarity)
+		return
+	var total := 1
+	if LawPerks.roll_double(LawPerks.roll()):
 		total = 2
 		GameState.toast_msg("¡COFRE DOBLE! Puedes elegir dos recompensas", Color(1.0, 0.85, 0.3))
 	_reward_pick(min_rarity, 1, total, [])
+
+
+func _boss_special_pick(min_rarity: int) -> void:
+	var seen: Array = GameState.run_stats.get("boss_seen", [])
+	var cards: Array = UpgradeDB.boss_case_cards(GameState.build, GameState.arena_index, GameState.rng, 2, GameState.build.s("luck"), seen)
+	if cards.is_empty():
+		_reward_pick(min_rarity, 1, 2, [])
+		return
+	var cs := CardSelect.new()
+	cs.picked.connect(func(card):
+		seen.append(String(card["id"]))
+		for c2 in cards:
+			if not seen.has(String(c2["id"])):
+				seen.append(String(c2["id"]))                  # lo ofrecido tampoco se repite en el siguiente jefe
+		GameState.run_stats["boss_seen"] = seen)
+	cs.closed.connect(func():
+		await get_tree().create_timer(0.1, true, false, true).timeout
+		_reward_pick(min_rarity, 1, 2, []))
+	cs.inventory_requested.connect(func(): _open_inventory_over(cs))
+	_open_overlay(cs)
+	cs.open_fixed(cards, "¡BOTÍN ESPECIAL DEL JEFE! ELIGE UNA", GameState.arena_index)
 
 
 ## Compatibilidad (pruebas y herramientas): abre las cartas de un cofre; 'second' = dos elecciones.
@@ -814,12 +844,6 @@ func _open_cards(min_rarity: int, second: bool) -> void:
 
 func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 	var cs := CardSelect.new()
-	# botín del jefe: la 1.ª elección es de MALETÍN (3 opciones de grupos distintos: daño, efectos, economía, cadencia)
-	var boss_case := step == 1 and total == 2 and arena != null and arena.kind == Scaling.KIND_BOSS
-	var fixed: Array = []
-	if boss_case:
-		fixed = UpgradeDB.boss_case_cards(GameState.build, GameState.arena_index, GameState.rng, maxi(min_rarity, 1), GameState.build.s("luck"))
-		boss_case = not fixed.is_empty()
 	cs.picked.connect(func(card): taken.append(String(card["id"])))
 	cs.closed.connect(func():
 		if step < total:
@@ -829,10 +853,7 @@ func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 			_autosave("portal" if arena.rewards_done() else "reward"))
 	cs.inventory_requested.connect(func(): _open_inventory_over(cs))
 	_open_overlay(cs)
-	if boss_case:
-		cs.open_fixed(fixed, "¡BOTÍN DEL JEFE! ELIGE TU MALETÍN", GameState.arena_index)
-	else:
-		cs.open(GameState.arena_index, min_rarity, "chest", 3, taken, step, total)
+	cs.open(GameState.arena_index, min_rarity, "chest", 3, taken, step, total)
 
 
 func _on_shop() -> void:

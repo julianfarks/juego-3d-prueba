@@ -54,6 +54,8 @@ class C extends RefCounted:
 	var multi_acc := 0.0
 	var beam_acc := 0.0
 	var prof: Dictionary = {}
+	var mod: Dictionary = {}         # estado de ataques secundarios (CaseMods)
+	var ghost := false               # copia espectral (Doble Maletín Fantasma)
 
 class S extends RefCounted:
 	var node: Node3D
@@ -73,6 +75,7 @@ class S extends RefCounted:
 	var frag_on_pop := false
 	var prof: Dictionary = {}
 
+var mods: CaseMods
 var cases: Array[C] = []
 var secondaries: Array[S] = []
 var _sec_pool: Dictionary = {}
@@ -97,6 +100,10 @@ var counts := {"throws": 0, "impacts": 0, "catches": 0, "blasts": 0, "rockets": 
 
 func _ready() -> void:
 	GameState.case_throw = self
+	mods = CaseMods.new()
+	mods.name = "CaseMods"
+	mods.ct = self
+	add_child(mods)
 
 
 # ============================================================================ API pública
@@ -173,6 +180,7 @@ func make_profile() -> Dictionary:
 	p["fw"] = int(b.s("bc_fw"))                                # Salva de Fuegos Artificiales: cohetes con cada lanzamiento
 	p["ret_speed"] = b.s("bc_ret")                             # Retorno Express
 	p["loot"] = int(b.s("bc_loot"))                            # Maletín Cobrador
+	p.merge(CaseMods.profile(b))
 	p["pyro"] = b.s("bc_pyro")
 	p["pyro_n"] = int(b.s("bc_pyro_n"))
 	p["frag"] = b.s("bc_frag")
@@ -213,13 +221,19 @@ func plan_cases(p: Dictionary) -> Array:
 		plan.append({"mult": 0.65, "side": -1.0, "ang": 0.0, "delay": 0.12, "range_x": 0.9})   # Doble Alegato
 	if b.s("slam_double") > 0.0 and randf() < b.s("slam_double"):
 		plan.append({"mult": 0.8, "side": -1.0, "ang": 0.0, "delay": 0.28, "range_x": 0.9})
-	while plan.size() > MAX_CASES:
+	while plan.size() > MAX_CASES - int(p.get("m_ghosts", 0)):
 		plan.pop_back()
 	# abanico: reparte los ángulos de los maletines adicionales alrededor de la dirección de apuntado
 	var n := plan.size()
 	for i in n:
 		var step := (i + 1) / 2                         # 0, +1, -1, +2, -2... (el maletín principal va al centro)
 		plan[i]["ang"] = (float(step) * (1.0 if i % 2 == 1 else -1.0)) * deg_to_rad(16.0) if n > 1 else 0.0
+	# Doble Maletín Fantasma: copias espectrales que acompañan al principal (mismo lanzamiento, trayectoria casi paralela)
+	for g in mini(int(p.get("m_ghosts", 0)), 3):
+		if plan.size() >= MAX_CASES:
+			break
+		var gs := 1.0 if g % 2 == 0 else -1.0
+		plan.append({"mult": 0.5, "side": -gs, "ang": gs * deg_to_rad(7.0 + 5.0 * float(g / 2)), "delay": 0.04, "range_x": 0.95, "ghost": true})
 	return plan
 
 
@@ -243,6 +257,7 @@ func throw_case(dir: Vector3, mega := false) -> bool:
 	LawPerks.on_throw()
 	if int(p["fw"]) > 0:
 		_launch_rockets(origin, null, float(p["base"]), p, int(p["fw"]))      # fuegos artificiales que salen con tu tiro
+	mods.on_throw(p, origin, dir, float(p["base"]))
 	for i in plan.size():
 		var spec: Dictionary = plan[i]
 		var delay: float = spec["delay"]
@@ -259,7 +274,8 @@ func _spawn_case(i: int, spec: Dictionary, p: Dictionary, dir: Vector3, origin: 
 		return
 	var c := C.new()
 	c.idx = i
-	c.main = i == 0
+	c.main = i == 0 and not bool(spec.get("ghost", false))
+	c.ghost = bool(spec.get("ghost", false))
 	c.prof = p
 	c.mega = mega
 	c.side = float(spec["side"])
@@ -271,6 +287,10 @@ func _spawn_case(i: int, spec: Dictionary, p: Dictionary, dir: Vector3, origin: 
 	c.pierce_left = int(p["pierce"])
 	c.bounces_left = int(p["bounces"])
 	c.wall_left = float(p["wall_t"])
+	if c.ghost:
+		c.pierce_left = 2 + int(p.get("m_pierce", 0))      # los fantasmas atraviesan enemigos y golpean objetivos adicionales
+		c.bounces_left = 0
+		c.wall_left = 0.0
 	c.pos = Vector3(origin.x, Terrain.ground_y(origin.x, origin.z) + HIT_Y, origin.z)
 	var flat_dir := Vector3(dir.x, 0.0, dir.z).normalized() if Vector3(dir.x, 0.0, dir.z).length() > 0.01 else Vector3.FORWARD
 	# arco: el ángulo total que gira en el trayecto es proporcional a la curvatura del arma
@@ -287,6 +307,14 @@ func _spawn_case(i: int, spec: Dictionary, p: Dictionary, dir: Vector3, origin: 
 	var mi := Mats.mesh_instance(ModelFactory.briefcase_mesh(), Mats.world_material(), c.pivot)
 	mi.position = Vector3(0, 0.24, 0)
 	mi.material_override = Mats.world_material()
+	if c.ghost:
+		var gm := StandardMaterial3D.new()
+		gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		gm.albedo_color = Color(0.55, 0.9, 1.0, 0.42)
+		gm.emission_enabled = true
+		gm.emission = Color(0.3, 0.8, 1.0)
+		gm.emission_energy_multiplier = 1.2
+		mi.material_override = gm
 	c.node.scale = Vector3.ONE * float(p["size"]) * (2.2 if mega else 1.0)
 	add_child(c.node)
 	c.node.global_position = c.pos
@@ -303,6 +331,8 @@ func clear_all() -> void:
 	cases.clear()
 	_queued.clear()
 	_pending_launch = false
+	if mods != null:
+		mods.clear_all()
 	for s in secondaries:
 		s.node.visible = false
 	secondaries.clear()
@@ -329,7 +359,7 @@ func _physics_process(delta: float) -> void:
 		if _pending_t <= 0.0:
 			_pending_launch = false
 			_set_hand_visible(true)
-	if cases.is_empty() and secondaries.is_empty() and _embers.is_empty() and _rain.is_empty() and _queued.is_empty():
+	if cases.is_empty() and secondaries.is_empty() and _embers.is_empty() and _rain.is_empty() and _queued.is_empty() and not mods.busy():
 		return
 	_clock += delta
 	for k in _cd.keys():
@@ -358,6 +388,7 @@ func _physics_process(delta: float) -> void:
 			cases.remove_at(i)
 		i -= 1
 	_update_secondary(delta, space)
+	mods.update(delta, space)
 	_update_embers(delta)
 	_update_rain(delta)
 	# invariante: el maletín de la mano solo se ve cuando NINGÚN maletín está fuera
@@ -432,6 +463,7 @@ func _step_case(c: C, delta: float, space: PhysicsDirectSpaceState3D) -> bool:
 				c.bounces_done += 1
 				_wall_fx(c, new_pos)
 				counts["bounces_wall"] += 1
+				mods.on_bounce(c)
 			else:
 				new_pos = res["position"] + n * 0.25
 				new_pos.y = c.pos.y
@@ -441,6 +473,7 @@ func _step_case(c: C, delta: float, space: PhysicsDirectSpaceState3D) -> bool:
 				new_pos = c.pos
 	c.pos = new_pos
 	c.node.global_position = c.pos
+	mods.case_tick(c, delta)
 	c.pivot.rotation = Vector3(0.0, c.pivot.rotation.y + 19.0 * delta, 0.28)
 	# --- rastro visible, brasas, proyectiles durante el vuelo ---
 	c.beam_acc += delta
@@ -516,8 +549,9 @@ func _catch(c: C) -> void:
 	AudioManager.combat_sfx("catch", hand, -4.0, AudioManager.P_ELEM, 1.0, 0.05)
 	if GameState.fx != null:
 		GameState.fx.burst(hand, Color(1.0, 0.9, 0.55), 6, 3.5, 0.1, 0.25)
-	ammo = mini(ammo + 1, ammo_max())                       # cada maletín recuperado recarga uno de la reserva
-	if player != null and is_instance_valid(player) and player.alive and int(c.prof.get("loot", 0)) > 0:
+	if c.main:
+		ammo = mini(ammo + 1, ammo_max())                   # cada maletín recuperado recarga uno de la reserva
+	if c.main and player != null and is_instance_valid(player) and player.alive and int(c.prof.get("loot", 0)) > 0:
 		var pay := LawPerks.case_loot_pay(c.hits.size(), int(c.prof["loot"]), GameState.arena_index)
 		if pay > 0:
 			GameState.add_coins(pay)
@@ -526,6 +560,7 @@ func _catch(c: C) -> void:
 	if player == null or not is_instance_valid(player) or not player.alive or not c.main:
 		return                           # los efectos de retorno se activan UNA vez por lanzamiento (maletín principal)
 	var p: Dictionary = c.prof
+	mods.on_catch(c)
 	# --- efectos de retorno ---
 	if float(p["ret_blast"]) > 0.0 and _blast_ok():
 		_note_blast()
@@ -574,6 +609,13 @@ func _impact(c: C, e: Node3D) -> void:
 		_shake_t = 0.12
 		GameState.cam.shake(0.14 if not c.mega else 0.6)
 	var ctx_pos := ipos + Vector3(0, 0.9, 0)
+	if c.ghost:
+		# la copia espectral solo daña (y perfora); los efectos de impacto los aporta el maletín real
+		if c.pierce_left > 0:
+			c.pierce_left -= 1
+		else:
+			_begin_return(c)
+		return
 	# ---- 1. Explosión legal -------------------------------------------------------------------
 	if float(p["blast"]) > 0.0 and _blast_ok():
 		_note_blast()
@@ -615,6 +657,7 @@ func _impact(c: C, e: Node3D) -> void:
 	if c.mega and c.impacts == 1:
 		Combat.explode(ipos, 7.0 * Combat.area_mult(), base * 0.6, {"src": "case_boom", "exclude": e, "soft": true})
 		GameState.toast_msg("¡ADQUISICIÓN HOSTIL!", Color(1.0, 0.8, 0.2))
+	mods.on_impact(c, e, base, ipos)
 	# ---- movimiento tras el impacto: perforar / rebotar entre enemigos / volver ---------------
 	if c.state == "ret":
 		return
@@ -629,6 +672,7 @@ func _impact(c: C, e: Node3D) -> void:
 			c.bounces_left -= 1
 			c.bounces_done += 1
 			counts["bounces_enemy"] += 1
+			mods.on_bounce(c)
 			var want: Vector3 = nxt.global_position - c.pos
 			want.y = 0.0
 			c.heading = want.normalized()

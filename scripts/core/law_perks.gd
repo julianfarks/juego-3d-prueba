@@ -22,6 +22,13 @@ const PAPER_HIT_CD := 0.6
 
 static var obj_stacks := 0
 static var obj_t := 0.0
+static var boss_mark := 0.0                       # daño recibido al aparecer el jefe (Honorarios de Jefe Limpio)
+static var kill_times: Array = []                 # instantes (s de partida) de las últimas bajas
+static var streak_pays := 0                       # pagos de Honorarios Rápidos en esta ronda
+static var ms_cd := 0.0                           # enfriamiento del Escudo de Despacho
+static var ms_t := 0.0                            # tiempo restante del escudo temporal
+static var ms_amt := 0.0
+static var leech_bucket := 0.0                    # cura disponible por golpes secundarios (límite por tiempo)
 static var round_t := 0.0                         # segundos dentro de la ronda actual (Impulso Procesal)
 static var _bill_t := 0.0
 static var _season_t := 0.0
@@ -42,6 +49,13 @@ static var forced_roll := -1.0          # pruebas: fuerza la próxima tirada (0.
 
 
 static func reset() -> void:
+	boss_mark = 0.0
+	kill_times.clear()
+	streak_pays = 0
+	ms_cd = 0.0
+	ms_t = 0.0
+	ms_amt = 0.0
+	leech_bucket = 0.0
 	round_t = 0.0
 	_bill_t = 0.0
 	_season_t = 0.0
@@ -66,6 +80,8 @@ static func roll() -> float:
 
 
 static func on_round_start() -> void:
+	streak_pays = 0
+	kill_times.clear()
 	round_t = 0.0
 	case_loot_round = 0
 	obj_stacks = 0
@@ -126,6 +142,35 @@ static func on_kill(_enemy: Node3D) -> void:
 	if b.s("law_obj") > 0.0:
 		obj_stacks = mini(OBJ_MAX_STACKS, obj_stacks + 1)
 		obj_t = OBJ_TIME
+	# bajas rápidas: Honorarios Rápidos (monedas) y Escudo de Despacho (escudo temporal)
+	var now: float = GameState.run_time
+	kill_times.append(now)
+	while kill_times.size() > 12:
+		kill_times.pop_front()
+	if b.s("law_streak_pay") > 0.0 and streak_pays < 6:
+		var recent := 0
+		for t in kill_times:
+			if now - float(t) <= 3.0:
+				recent += 1
+		if recent >= 5:
+			kill_times.clear()
+			streak_pays += 1
+			var pay := int(round(b.s("law_streak_pay"))) * (1 + GameState.arena_index / 4)
+			GameState.add_coins(pay)
+			if GameState.fx != null:
+				GameState.fx.damage_number(pl.global_position + Vector3(0, 2.8, 0), "RACHA +%d $" % pay, Color(1.0, 0.85, 0.3), 1.0)
+	if b.s("law_mshield") > 0.0 and ms_cd <= 0.0 and pl.alive:
+		var recent2 := 0
+		for t in kill_times:
+			if now - float(t) <= 4.0:
+				recent2 += 1
+		if recent2 >= 4:
+			ms_cd = 8.0
+			ms_amt = pl.max_hp * minf(b.s("law_mshield"), 0.4)
+			ms_t = 8.0
+			pl.shield = minf(pl.shield + ms_amt, maxf(pl.shield_max, ms_amt * 2.0))
+			if GameState.fx != null:
+				GameState.fx.ring(pl.global_position, 2.2, Color(0.5, 0.8, 1.0, 0.8), 0.4, 0.5)
 	if b.s("law_medic") > 0.0 and pl.alive:
 		kills_since_heal += 1
 		if kills_since_heal >= MEDIC_EVERY:
@@ -215,7 +260,42 @@ static func case_loot_pay(hits: int, per_hit: int, arena_index: int) -> int:
 	return pay
 
 
+## Golpe de un ataque secundario del maletín: Cobro por Impacto cura un poco (con tope por tiempo).
+static func on_secondary_hit() -> void:
+	var b: Build = GameState.build
+	var pl = GameState.player
+	if b.s("law_leech") <= 0.0 or pl == null or not is_instance_valid(pl) or not pl.alive:
+		return
+	var want: float = pl.max_hp * minf(b.s("law_leech"), 0.03)
+	var give := minf(want, leech_bucket)
+	if give > 0.0:
+		leech_bucket -= give
+		pl.heal(give)
+
+
+## Al derrotar a un jefe: Honorarios de Jefe Limpio paga si apenas recibiste daño durante el combate.
+static func on_boss_defeated() -> void:
+	var b: Build = GameState.build
+	var pl = GameState.player
+	if b.s("law_clean") <= 0.0 or pl == null or not is_instance_valid(pl):
+		return
+	var taken: float = float(GameState.run_stats["damage_taken"]) - boss_mark
+	if taken <= pl.max_hp * 0.25:
+		var pay := int(round(40.0 * b.s("law_clean"))) * (1 + GameState.arena_index / 5)
+		GameState.add_coins(pay)
+		pl.heal(pl.max_hp * 0.2)
+		GameState.toast_msg("¡JEFE LIMPIO! +%d monedas" % pay, Color(1.0, 0.85, 0.3))
+
+
 static func update(delta: float) -> void:
+	ms_cd = maxf(0.0, ms_cd - delta)
+	if ms_t > 0.0:
+		ms_t -= delta
+		if ms_t <= 0.0 and GameState.player != null and is_instance_valid(GameState.player):
+			GameState.player.shield = maxf(0.0, GameState.player.shield - ms_amt)
+			ms_amt = 0.0
+	if GameState.player != null and is_instance_valid(GameState.player):
+		leech_bucket = minf(leech_bucket + GameState.player.max_hp * 0.01 * delta, GameState.player.max_hp * 0.05)
 	round_t += delta
 	var pl = GameState.player
 	var b: Build = GameState.build

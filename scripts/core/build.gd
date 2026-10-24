@@ -362,7 +362,7 @@ func power_rating() -> float:
 
 ## Aporte estimado de las mejoras del maletín lanzado (CaseThrow): cada efecto pesa según cuánto daño añade por impacto.
 func case_power() -> float:
-	var p := s("bc_dmg") + 0.45 * s("bc_blast") + 0.5 * s("bc_pyro") + 0.10 * s("bc_frag") * (1.0 + s("bc_frag_dmg") * 10.0) + 0.3 * s("bc_docs") + 0.25 * s("bc_fw") + 0.6 * s("bc_rate") + 0.35 * s("bc_ammo")
+	var p := s("bc_dmg") + 0.45 * s("bc_blast") + 0.5 * s("bc_pyro") + 0.10 * s("bc_frag") * (1.0 + s("bc_frag_dmg") * 10.0) + 0.3 * s("bc_docs") + 0.25 * s("bc_fw") + 0.6 * s("bc_rate") + 0.35 * s("bc_ammo") + 0.3 * s("bc_knife") + 0.35 * s("bc_missile") + 0.3 * s("bc_ray") + 0.25 * s("bc_orbit") + 0.2 * s("bc_files") + 0.4 * s("bc_ghost") + 0.3 * s("bc_disc") + 0.4 * s("bc_laser")
 	p += 0.4 * s("bc_rain") + 0.5 * s("bc_shock") + 0.3 * s("bc_corr") + 0.7 * s("bc_trail") + 0.3 * s("bc_multi") + 0.35 * s("bc_return")
 	p += 0.12 * s("bc_pierce") + 0.1 * s("bc_bounce") + 0.5 * s("bc_cases") + 0.35 * s("bc_double") + 0.75 * s("bc_crit") + 0.5 * s("bc_sharp")
 	p += 0.25 * s("bc_range") + 0.2 * s("bc_size") + 0.15 * s("bc_speed") + 0.2 * s("bc_wall")

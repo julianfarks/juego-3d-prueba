@@ -365,6 +365,7 @@ func _spawn_enemy(k: String, at := Vector3.INF) -> Enemy:
 
 
 func _spawn_boss(k: String) -> void:
+	LawPerks.boss_mark = float(GameState.run_stats["damage_taken"])
 	var pl = GameState.player
 	var pp: Vector3 = Vector3.ZERO if pl == null else pl.global_position
 	var dir := Vector3(0, 0, -1) if pp.z > -1.0 else Vector3(0, 0, 1)
@@ -395,6 +396,7 @@ func _on_enemy_died(e: Enemy) -> void:
 		_drop_coin(e.global_position + Vector3(0, 0.8, 0), each)
 	if e == _boss_ref and kind == Scaling.KIND_BOSS:
 		_boss_dead_t = 1.2
+		LawPerks.on_boss_defeated()
 		GameState.toast_msg("¡JEFE DERROTADO!", Color(1.0, 0.85, 0.3))
 		AudioManager.sfx("victory")
 	elif e == _boss_ref:

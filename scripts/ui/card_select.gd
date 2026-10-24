@@ -117,7 +117,11 @@ func _rebuild() -> void:
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		pc.add_child(v)
 		if card.has("group"):
-			v.add_child(UIKit.label("◆ %s ◆" % String(card["group"]), 22, ccol, HORIZONTAL_ALIGNMENT_CENTER))
+			var gl := UIKit.label("◆ %s ◆" % String(card["group"]), 20, ccol, HORIZONTAL_ALIGNMENT_CENTER)
+			gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			v.add_child(gl)
+			if card.get("special", false):
+				v.add_child(UIKit.label("ESPECIAL · +1 NIVEL DE REGALO", 16, Color(1.0, 0.85, 0.3), HORIZONTAL_ALIGNMENT_CENTER))
 		var rl := UIKit.label(String(UpgradeDB.RARITY_NAMES[rar]).to_upper(), 20, rcol, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(rl)
 		var ic := IconView.new().setup(String(d["icon"]), ccol, 110.0)
@@ -227,6 +231,8 @@ func _on_confirm() -> void:
 		_update_buttons()
 		return
 	GameState.build.add(card["id"], card["rarity"])
+	if card.get("special", false) and GameState.build.can_add(card["id"]):
+		GameState.build.add(card["id"], card["rarity"])           # botín especial del jefe: +1 nivel de regalo
 	GameState.run_stats["cards"] += 1
 	GameState.build_changed.emit()
 	AudioManager.sfx("card")
