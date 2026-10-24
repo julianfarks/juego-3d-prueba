@@ -21,6 +21,7 @@ var source := "chest"
 var _inv_info: Label
 var _inv_btn: Button
 var _inv_changed := false
+var _exclude: Array = []        # mejoras ya elegidas en este mismo cofre (la 2.ª elección no las repite)
 
 
 func _ready() -> void:
@@ -62,17 +63,20 @@ func _skip_value() -> int:
 	return int(round((15 + int(GameState.arena_index * 2)) * (1.0 + GameState.build.s("skip_bonus"))))
 
 
-func open(depth: int, p_min_rarity := 0, p_source := "chest", count := 3) -> void:
+func open(depth: int, p_min_rarity := 0, p_source := "chest", count := 3, p_exclude: Array = [], p_step := 1, p_total := 1) -> void:
 	_depth = depth
 	min_rarity = p_min_rarity
 	source = p_source
+	_exclude = p_exclude
 	_title.text = "¡CONTENIDO DEL COFRE!" if source == "chest" else "ELIGE UNA MEJORA"
+	if p_total > 1:
+		_title.text = "RECOMPENSA %d DE %d" % [p_step, p_total]       # cofre doble / de jefe: dos elecciones independientes
 	_roll(count + int(GameState.build.s("chest_cards")))
 
 
 func _roll(count: int) -> void:
 	var b: Build = GameState.build
-	_cards = UpgradeDB.roll_cards(count, b.s("luck"), _depth, b, GameState.rng, min_rarity)
+	_cards = UpgradeDB.roll_cards(count, b.s("luck"), _depth, b, GameState.rng, min_rarity, _exclude)
 	_selected = -1
 	_rebuild()
 	_update_buttons()

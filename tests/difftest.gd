@@ -205,7 +205,7 @@ func _diff_interaction() -> void:
 		await _secs(0.3)
 		ok(LoadoutDB.selected_difficulty() == other, "I: tocar ELEGIR cambia la dificultad a %s" % other)
 	ui = _overlay_of(DifficultyUI) as DifficultyUI
-	var locked := LoadoutDB.DIFF_ORDER[LoadoutDB.DIFF_ORDER.size() - 1]
+	var locked = LoadoutDB.DIFF_ORDER[LoadoutDB.DIFF_ORDER.size() - 1]
 	var lb := ui.find_child("DiffBtn_" + locked, true, false) as Button
 	ok(lb != null and (lb.disabled == (not LoadoutDB.diff_unlocked(locked))), "I: la dificultad bloqueada sigue bloqueada (%s)" % locked)
 	# restaura la elección original

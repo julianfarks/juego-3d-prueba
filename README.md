@@ -34,7 +34,18 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 2. Release firmado: crear un keystore propio, guardarlo como *secret* de GitHub y añadir pasos de firma. **No** subas claves al repo.
 
 ## Modo desarrollador
-Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
+Ajustes → **CÓDIGOS** → escribir el código de desarrollador → aparece el menú **DESARROLLADOR** en Ajustes (se recuerda entre sesiones; se puede ocultar). Permite sumar dinero y honorarios (botones o cantidad libre), agregar cualquier mejora con rareza y cantidad (respetando sus máximos), modo Dios, saltar de arena y depuración. El código se guarda solo como hash SHA-256.
+
+## Novedades 0.11.0 — cofres por rendimiento, 15 poderes judiciales, tienda y economía ampliadas
+- **Ronda perfecta**: si pierdes como máximo el 20 % de tu vida máxima real en la ronda (se mide por golpe, el escudo no cuenta y curarse no oculta el daño) hay un 50 % de «COFRE EXTRA». Se comprueba una sola vez por ronda, se guarda y no se repite al cargar. El portal espera a abrir los dos cofres.
+- **Cofre doble**: cada cofre tiene un 50 % de dejar elegir **dos** recompensas independientes (la segunda no repite la primera). No se acumula con el doble de los cofres de jefe (máx. 2 por cofre).
+- **15 poderes** (`law_catalog.gd`/`law_perks.gd`): Maletín Demoledor, Regreso Letal, Expediente Perforante, Doble Alegato, Sentencia Crítica, Cadena de Objeciones, Mazo Judicial, Papeles Cortantes, Última Palabra, Defensa Procesal, Evasión Legal, Blindaje de Expedientes, Recuperación Médica, Impulso de Apelación y Escudo de Inmunidad. Todos con tope.
+- **6 sinergias** visibles en el inventario: Doble Sentencia, Archivo Cortante, Contraataque Procesal, Cobertura Médica, Veredicto Final y Bufete Eficiente.
+- **Economía** (con topes): Honorarios por Victoria, Cliente de Alto Perfil, Cobro Anticipado, Intereses del Bufete, Negociador Experto (máx. −50 % en tienda) y Recompensa por Eficiencia. Cada baja se paga una sola vez (`kill_paid`).
+- **Tienda**: 15 artículos exclusivos nuevos (no salen en cofres) en 6 grupos, 3 por visita de grupos distintos y que varían entre visitas; precio y rareza visibles, compra validada, antidoble pulsación y límite de 3 relanzamientos intactos.
+- **Códigos / DESARROLLADOR** en Ajustes (ver arriba).
+- Arreglos: el cartel de región ya no bloquea los toques del centro de la pantalla; «Mesa del Juez» adaptable con scroll y mano 3D señalando la mesa (0.10.4).
+- Pruebas: `--lawtest` (≈110 comprobaciones: catálogo, cofres, poderes, sinergias, economía, tienda, guardado, códigos/desarrollador) y `--difftest`.
 
 ## Novedades 0.10.3 — pantalla de derrota/victoria adaptable
 - `EndScreen` rehecha con contenedores reales: el panel se ajusta al área visible (márgenes proporcionales, ancho máx. 1040, recolocado si cambia la ventana); título, honorarios y botones fijos; estadísticas (2 columnas de pares) y la lista completa de mejoras con su nivel (2 columnas, varias líneas) en una zona desplazable con el dedo o con el stick derecho. Botones en `HFlowContainer` (pasan a otra fila si no caben), ≥64 px de alto.

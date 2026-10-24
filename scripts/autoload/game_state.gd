@@ -46,6 +46,11 @@ var look_delta := Vector2.ZERO   # gestos de cámara acumulados por la capa tác
 var kill_streak := 0
 var streak_timer := 0.0
 var run_stats := {}
+## Rendimiento de la ronda en curso (v0.11): vida REAL perdida (sin contar curas ni escudo), vida al empezar y vida máxima.
+var round_damage := 0.0
+var round_start_hp := 0.0
+var round_max_hp := 100.0
+var round_perf: Dictionary = {}
 
 var _last_stat_save := 0.0
 
@@ -107,6 +112,7 @@ func _reset_flush() -> void:
 
 
 func start_run() -> void:
+	LawPerks.reset()
 	if player != null:
 		player.skills.practice = false
 	in_run = true
@@ -175,12 +181,14 @@ func snapshot_run(stage: String) -> Dictionary:
 		"flushed": _flushed.duplicate(),
 		"fees_paid": _fees_paid,
 		"shop_purchases": ShopUI.purchases,
+		"perf": ({"result": ar.perf_result, "bonus": ar.bonus_chest_wanted, "bonus_taken": ar.bonus_taken, "main_taken": ar.chest_taken} if ar != null and ar.phase == Arena.Phase.CLEARED else {}),
 		"saved_at": Time.get_unix_time_from_system(),
 	}
 
 
 ## Restaura una partida guardada (ya validada por SaveSystem). No cuenta como partida nueva.
 func restore_run(r: Dictionary) -> void:
+	LawPerks.reset()
 	if player != null:
 		player.skills.practice = false
 	in_run = true

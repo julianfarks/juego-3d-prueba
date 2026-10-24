@@ -61,6 +61,10 @@ const CAPS := {
 	"bc_rain": 1.0, "bc_rain_n": 6.0, "bc_shock": 1.0, "bc_shock_n": 6.0, "bc_corr": 1.0, "bc_spread": 12.0, "bc_trail": 2.0,
 	"bc_multi": 3.0, "bc_return": 4.2, "bc_return_r": 1.5, "bc_catch": 0.8, "bc_pierce": 8.0, "bc_bounce": 8.0, "bc_wall": 6.0,
 	"bc_cases": 5.0, "bc_double": 4.0,
+	# ampliación judicial (LawCatalog): todo con tope duro
+	"law_demo": 2.0, "law_ret": 1.5, "law_pierce": 6.0, "law_dbl": 0.4, "law_sent": 0.4, "law_obj": 0.08, "law_gavel": 4.8, "law_papers": 8.0,
+	"law_final": 1.2, "law_def": 0.35, "law_dodge": 0.9, "law_block": 0.3, "law_medic": 0.06, "law_immun": 90.0,
+	"law_fee_win": 0.6, "law_vip": 1.0, "law_adv": 60.0, "law_firm": 0.15, "law_eff": 120.0,
 }
 
 ## Máximo de niveles de cualquier mejora y separación entre hitos (multiplicadores extra por cada 10 niveles).
@@ -189,6 +193,7 @@ static func _ensure() -> void:
 			_by_id[id]["tags"] = UpgradeCatalog.EXISTING_TAGS[id]
 	UpgradeCatalog.register()
 	CaseCatalog.register()
+	LawCatalog.register()
 
 
 # ---------------------------------------------------------------- SINERGIAS
@@ -233,6 +238,7 @@ static func synergies() -> Array:
 		{"id": "tag_money", "name": "Bufete Próspero", "desc": "5 mejoras de monedas: +15% de descuento en tienda y +1 moneda por baja.", "needs": {}, "tags": {"monedas": 5}, "gives": {"shop_discount": 0.15, "kill_coins": 1.0}},
 	]
 	_syn_cache.append_array(CaseCatalog.synergies())
+	_syn_cache.append_array(LawCatalog.synergies())
 	return _syn_cache
 
 
@@ -305,6 +311,8 @@ static func milestones_at(level: int) -> int:
 
 ## ¿Sigue aportando algo? Falso si ya está al nivel máximo o su estadística principal ya tocó su límite duro.
 static func is_offerable(d: Dictionary, build: Build, depth := 0) -> bool:
+	if d.get("shop_only", false):
+		return false                 # artículos exclusivos de la tienda del despacho
 	if build == null:
 		return true
 	if build.count_of(d["id"]) >= mini(int(d["max"]), UpgradeDB.MAX_LEVEL):
@@ -409,10 +417,12 @@ static func _pick_weight(d: Dictionary, build: Build, equipped: Array) -> float:
 ## 'min_rarity' garantiza al menos una carta de esa rareza o mayor (cofres de jefe).
 ## Excluye: mejoras en su nivel máximo (50 como mucho), con la estadística principal ya en su límite duro,
 ## y duplicados dentro del mismo cofre. Pondera según el equipamiento y la build.
-static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: RandomNumberGenerator, min_rarity := 0) -> Array:
+static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: RandomNumberGenerator, min_rarity := 0, exclude: Array = []) -> Array:
 	_ensure()
 	var cards: Array = []
 	var used := {}
+	for ex in exclude:
+		used[String(ex)] = true          # p. ej. la 2.ª recompensa de un cofre doble nunca repite la 1.ª
 	var equipped: Array = []
 	if GameState != null and GameState.loadout is Dictionary:
 		for slot in (GameState.loadout as Dictionary).keys():
@@ -468,6 +478,40 @@ static func roll_cards(count: int, luck: float, depth: int, build: Build, rng: R
 		used[chosen["id"]] = true
 		cards.append({"id": chosen["id"], "rarity": rarity})
 	return cards
+
+
+## Artículos exclusivos de la tienda (shop_only) que se pueden comprar ahora: no están al máximo ni el inventario lleno.
+static func shop_items(build: Build) -> Array:
+	_ensure()
+	var out: Array = []
+	for d in _defs:
+		if not d.get("shop_only", false):
+			continue
+		if build != null:
+			var n := build.count_of(d["id"])
+			if n >= int(d["max"]):
+				continue
+			if n == 0 and build.is_full():
+				continue
+		out.append(d)
+	return out
+
+
+## Rareza de un artículo de tienda: ponderada por las probabilidades normales (suerte y profundidad) dentro de las que admite.
+static func roll_shop_rarity(d: Dictionary, luck: float, depth: int, rng: RandomNumberGenerator) -> int:
+	var rs: Array = d["rarities"]
+	var total := 0.0
+	var ws: Array = []
+	for r in rs:
+		var w: float = RARITY_WEIGHT[r] * (1.0 + (luck * float(r) + depth * 0.02 * float(r)))
+		ws.append(w)
+		total += w
+	var x := rng.randf() * total
+	for i in rs.size():
+		x -= float(ws[i])
+		if x <= 0.0:
+			return int(rs[i])
+	return int(rs[rs.size() - 1])
 
 
 ## Qué cambia al elegir la carta: líneas "Etiqueta: antes → después" con la build real.
@@ -529,6 +573,8 @@ static func stat_label(key: String) -> String:
 		return "Daño de %s" % key.substr(2)
 	if CaseCatalog.LABELS.has(key):
 		return String(CaseCatalog.LABELS[key])
+	if LawCatalog.LABELS.has(key):
+		return String(LawCatalog.LABELS[key])
 	return String(STAT_LABELS.get(key, key))
 
 

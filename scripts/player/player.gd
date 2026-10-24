@@ -77,6 +77,7 @@ func reset_for_run() -> void:
 	alive = true
 	rig.revive()
 	Perks.reset()
+	LawPerks.reset()
 	skills.reset()
 	var b: Build = GameState.build
 	max_hp = compute_max_hp()
@@ -184,6 +185,7 @@ func _physics_process(delta: float) -> void:
 	_heal_budget = minf(14.0, _heal_budget + 14.0 * delta)
 	skills.update(delta)
 	Perks.update(delta)
+	LawPerks.update(delta)
 	_update_regen(delta, b)
 	# --- entrada de movimiento ---
 	var iv := _input_vector()
@@ -295,6 +297,7 @@ func _try_dodge(move_dir: Vector3) -> void:
 	_dodge_cd = float(Config.PLAYER["dodge_cd"]) * (1.0 - minf(b.s("dodge_cd"), 0.6))
 	iframes = maxf(iframes, float(Config.PLAYER["iframes"]) + b.s("iframe_add"))
 	Perks.fire("dodge", {})
+	LawPerks.on_dodge()
 	_trail_hit.clear()
 	_trail_tick = 0.0
 	skills.dodge_haste_t = 2.5 if b.s("dodge_haste") > 0.0 else 0.0
@@ -350,6 +353,11 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 	if iframes > 0.0 or hurt_iframes > 0.0:
 		return
 	var b: Build = GameState.build
+	if LawPerks.try_block():
+		if GameState.fx != null:
+			GameState.fx.damage_number(global_position + Vector3(0, 2.3, 0), "¡EXPEDIENTE!", Color(0.6, 0.85, 1.0), 1.0)
+		AudioManager.sfx("shield", -4.0)
+		return
 	if b.s("block") > 0.0 and randf() < b.s("block"):
 		if GameState.fx != null:
 			GameState.fx.damage_number(global_position + Vector3(0, 2.3, 0), "¡OBJECIÓN!", Color(0.5, 0.9, 1.0), 1.0)
@@ -358,7 +366,7 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 	var armor := b.s("armor") + Perks.buff("armor")
 	if hp < max_hp * 0.35:
 		armor += b.s("armor_low")
-	var dmg := amount * (1.0 - minf(armor, 0.8)) * (1.0 + b.s("dmg_taken"))
+	var dmg := amount * (1.0 - minf(armor, 0.8)) * (1.0 + b.s("dmg_taken")) * LawPerks.def_mult()
 	dmg = skills.absorb(dmg)
 	if dmg <= 0.01:
 		hurt_iframes = 0.15
@@ -376,7 +384,10 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 			if b.s("syn_shield_blast") > 0.0:
 				Combat.explode(global_position, 5.0 * Combat.area_mult(), b.s("thorns") * 5.0 + 20.0, {"src": "thorns"})
 	if dmg > 0.0:
+		var lost := minf(dmg, maxf(hp, 0.0))                 # vida REAL perdida (sin contar escudo ni exceso)
 		hp -= dmg
+		GameState.round_damage += lost
+		LawPerks.on_player_damaged(lost, max_hp)
 	hurt_iframes = 0.4 + b.s("hurt_iframe_add")
 	Perks.fire("hurt", {})
 	rig.play("hit", 0.28)

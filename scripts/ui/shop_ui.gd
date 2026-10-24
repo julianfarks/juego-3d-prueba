@@ -24,6 +24,8 @@ var _drag_start := Vector2.ZERO
 var _drag_last := Vector2.ZERO
 var _drag_vel := 0.0
 var _inertia := 0.0
+static var _last_ids: Array = []     # ofertas exclusivas de la visita anterior (se evita repetirlas)
+var _lock_until := 0                # milisegundos: anti doble pulsación (compras y relanzamientos)
 static var purchases := 0         # compras de la partida actual (reinicia Main al empezar)
 
 const ATTR_CATS := ["dmg", "speed", "atk", "crit", "hp", "shield"]
@@ -140,6 +142,9 @@ func _ask_reroll() -> void:
 
 ## Cobra y sustituye las ofertas. Devuelve true si se relanzó. Valida límite y saldo (nunca cobra si falla).
 func do_reroll() -> bool:
+	if Time.get_ticks_msec() < _lock_until:
+		return false                      # una pulsación doble nunca cobra dos relanzamientos
+	_lock_until = Time.get_ticks_msec() + 400
 	if rerolls_used() >= MAX_REROLLS:
 		return false
 	var cost := reroll_cost()
@@ -194,7 +199,65 @@ func _generate(depth: int) -> void:
 	take.call(SKILL_CATS, 1, 0, float(Config.ECONOMY["skill_price"]), "Habilidad")
 	take.call(UpgradeDB.CATEGORY_NAMES.keys(), 1, 2, float(Config.ECONOMY["special_price"]) * 0.8, "Especial")
 	_offers.append({"type": "revive", "name": "Segunda Opinión", "desc": "Si caes, reapareces con 40% de salud (una vez).", "icon": "cross", "color": Color(1.0, 0.9, 0.4), "base": float(Config.ECONOMY["special_price"]) * 1.3, "sold": false, "repeat": false})
+	_add_exclusive(depth, b)
 	_offers.append({"type": "energy", "name": "Café del despacho", "desc": "Recarga toda tu energía y reinicia enfriamientos.", "icon": "cell", "color": Color(1.0, 0.78, 0.2), "base": float(Config.ECONOMY["heal_price"]) * 0.6, "sold": false, "repeat": true})
+
+
+## Artículos exclusivos de la tienda (v0.11): 3 de grupos distintos (ofensiva, defensiva, movilidad, económica, curación,
+## especial), con más peso a lo que complementa tu build, menos a lo que viste en la visita anterior, y una oferta de
+## consumible (curación total o escudo). La rareza influye en la probabilidad: no está garantizada.
+func _add_exclusive(depth: int, b: Build) -> void:
+	var items := UpgradeDB.shop_items(b)
+	var pl = GameState.player
+	var hurt: bool = pl != null and is_instance_valid(pl) and pl.hp < pl.max_hp * 0.6
+	var used_groups := {}
+	var ids: Array = []
+	for _n in 3:
+		var cand: Array = []
+		var ws: Array = []
+		var total := 0.0
+		for d in items:
+			if ids.has(d["id"]):
+				continue
+			var grp := String(LawCatalog.SHOP_GROUPS.get(d["id"], "Especial"))
+			var w := 1.0
+			if used_groups.has(grp):
+				w *= 0.05                                  # prioriza grupos distintos
+			if _last_ids.has(d["id"]):
+				w *= 0.2                                   # evita una tienda idéntica a la anterior
+			for tg in d["tags"]:
+				w += 0.3 * float(mini(b.tag_count(tg), 3))   # complementa la build actual
+			if b.count_of(d["id"]) > 0:
+				w *= 1.2
+			if grp == "Curación" and hurt:
+				w *= 2.5
+			if grp == "Especial":
+				w *= 0.45                                  # las mejoras especiales son poco frecuentes
+			cand.append(d)
+			ws.append(w)
+			total += w
+		if cand.is_empty():
+			break
+		var x := GameState.rng.randf() * total
+		var chosen: Dictionary = cand[cand.size() - 1]
+		for k in cand.size():
+			x -= float(ws[k])
+			if x <= 0.0:
+				chosen = cand[k]
+				break
+		var grp2 := String(LawCatalog.SHOP_GROUPS.get(chosen["id"], "Especial"))
+		used_groups[grp2] = true
+		ids.append(chosen["id"])
+		var rar := UpgradeDB.roll_shop_rarity(chosen, b.s("luck") + 0.1, depth, GameState.rng)
+		var base := float(Config.ECONOMY["attr_price"]) * (1.0 + 0.7 * float(rar)) * (1.5 if grp2 == "Especial" else 1.0)
+		_offers.append({"type": "card", "card": {"id": chosen["id"], "rarity": rar}, "name": "%s · NIVEL %d → %d" % [chosen["name"], b.count_of(chosen["id"]), b.count_of(chosen["id"]) + 1],
+			"desc": UpgradeDB.describe(chosen["id"], rar), "icon": chosen["icon"], "color": UpgradeDB.CATEGORY_COLORS.get(chosen["cat"], Color.WHITE),
+			"base": base, "sold": false, "label": "Tienda · " + grp2})
+	_last_ids = ids
+	if GameState.rng.randf() < 0.5:
+		_offers.append({"type": "heal_full", "name": "Tratamiento intensivo", "desc": "Recupera TODA tu salud.", "icon": "heart", "color": Color(0.95, 0.35, 0.5), "base": float(Config.ECONOMY["heal_price"]) * 2.2, "sold": false, "repeat": true})
+	else:
+		_offers.append({"type": "shield_pack", "name": "Escudo de cortesía", "desc": "+40 de escudo temporal (se pierde al romperse).", "icon": "shield", "color": Color(0.4, 0.7, 1.0), "base": float(Config.ECONOMY["heal_price"]) * 1.6, "sold": false, "repeat": true})
 
 
 func _refresh() -> void:
@@ -284,8 +347,9 @@ func _ask_buy(i: int) -> void:
 
 func _buy(i: int) -> void:
 	var o: Dictionary = _offers[i]
-	if o["sold"]:
+	if o["sold"] or Time.get_ticks_msec() < _lock_until:
 		return
+	_lock_until = Time.get_ticks_msec() + 400
 	var price := price_of(float(o["base"]))
 	if o["type"] == "card" and not GameState.build.can_add(o["card"]["id"]):
 		GameState.toast_msg(GameState.build.why_not(o["card"]["id"]), Color(1.0, 0.5, 0.4))
@@ -299,6 +363,13 @@ func _buy(i: int) -> void:
 		"heal":
 			if pl != null:
 				pl.heal(pl.max_hp * 0.45)
+		"heal_full":
+			if pl != null:
+				pl.heal(pl.max_hp)
+		"shield_pack":
+			if pl != null:
+				pl.shield = minf(pl.shield_max + Perks.OVERSHIELD, pl.shield + 40.0)
+				pl.emit_hp()
 		"energy":
 			if pl != null:
 				pl.skills.energy = pl.skills.energy_max

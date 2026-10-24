@@ -10,7 +10,7 @@ extends Control
 signal closed
 signal edit_controls_requested
 
-const DEV_HASH := "cc22eeb5148b1958e6a9999e4f76bbaf152c7a81079d9218164199d9e2b46d2d"
+const CODE_DEV_HASH := "9481bba0edf44b6d9ab0462aeea1726921565d97b7813b8537f7e4e971aacc5c"   # sha256 del código que desbloquea DESARROLLADOR
 const AUDIO_DEFAULTS := {"music": 0.7, "sfx": 0.9, "combat_sfx": 0.85, "ambient": 0.6}
 const TITLES := {"game": "AJUSTES", "video": "VÍDEO Y GRÁFICOS", "audio": "AUDIO", "camera": "CÁMARA"}
 
@@ -204,6 +204,14 @@ func _build_game() -> void:
 			queue_free())
 		add_child(cm))
 	crow.add_child(cbtn)
+	_section("Códigos")
+	var codes_btn := UIKit.accent_button("CÓDIGOS", Vector2(320, 60), 24)
+	codes_btn.name = "OpenCodes"
+	codes_btn.pressed.connect(_ask_code)
+	_vbox.add_child(codes_btn)
+	_dev_box = VBoxContainer.new()
+	_dev_box.name = "DevBox"
+	_vbox.add_child(_dev_box)
 	_section("Acerca de")
 	var ver := UIKit.label("%s  v%s" % [Config.GAME_NAME, Config.VERSION], 20, UIKit.TEXT_DIM)
 	ver.name = "VersionLabel"
@@ -211,8 +219,6 @@ func _build_game() -> void:
 	ver.gui_input.connect(_on_version_input)
 	_vbox.add_child(ver)
 	_vbox.add_child(UIKit.label("Hecho con Godot 4. Todo el arte y audio es procedural y original.", 18, UIKit.TEXT_DIM))
-	_dev_box = VBoxContainer.new()
-	_vbox.add_child(_dev_box)
 	_refresh_dev()
 
 
@@ -342,51 +348,87 @@ func _on_version_input(event: InputEvent) -> void:
 		_ask_code()
 
 
+## Menú CÓDIGOS: se escribe un código y, si es válido, se desbloquea el menú DESARROLLADOR (se guarda en los ajustes).
 func _ask_code() -> void:
-	if bool(SaveSystem.setting("dev_unlocked")):
-		return
 	var box := Control.new()
+	box.name = "CodesBox"
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(box)
-	box.add_child(UIKit.dim_background(0.7))
-	var v := UIKit.center_box(box, Vector2(560, 240))
-	v.add_child(UIKit.label("Código de acceso", 28, UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(UIKit.dim_background(0.75))
+	var v := UIKit.center_box(box, Vector2(min(620.0, get_viewport().get_visible_rect().size.x - 40.0), 0))
+	v.add_theme_constant_override("separation", 10)
+	v.add_child(UIKit.label("CÓDIGOS", 36, UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+	var info := UIKit.label("Escribe un código para desbloquear contenido.", 20, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size = Vector2(300, 0)
+	v.add_child(info)
 	var le := LineEdit.new()
-	le.secret = true
-	le.custom_minimum_size = Vector2(440, 56)
+	le.name = "CodeInput"
+	le.placeholder_text = "Código"
+	le.custom_minimum_size = Vector2(300, 58)
+	le.add_theme_font_size_override("font_size", 26)
 	v.add_child(le)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var msg := UIKit.label("", 22, UIKit.GOOD, HORIZONTAL_ALIGNMENT_CENTER)
+	msg.name = "CodeMsg"
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msg.custom_minimum_size = Vector2(300, 0)
+	v.add_child(msg)
+	var row := HFlowContainer.new()
+	row.alignment = FlowContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("h_separation", 14)
 	v.add_child(row)
-	var no := UIKit.button("Cancelar", Vector2(200, 56), 22)
+	var no := UIKit.button("Cerrar", Vector2(200, 58), 24)
+	no.name = "CodeClose"
 	no.pressed.connect(box.queue_free)
 	row.add_child(no)
-	var ok := UIKit.accent_button("Entrar", Vector2(200, 56), 22)
-	ok.pressed.connect(func():
-		if le.text.sha256_text() == DEV_HASH:
-			SaveSystem.set_setting("dev_unlocked", true)
-			Config.dev_mode = true
-			GameState.toast_msg("Modo desarrollador activado", UIKit.GOOD)
-			box.queue_free()
-			_refresh_dev()
+	var ok := UIKit.accent_button("Canjear", Vector2(220, 58), 24)
+	ok.name = "CodeRedeem"
+	var redeem := func():
+		var r := redeem_code(le.text)
+		msg.text = String(r["msg"])
+		msg.add_theme_color_override("font_color", UIKit.GOOD if bool(r["ok"]) else UIKit.BAD)
+		if bool(r["ok"]):
+			AudioManager.sfx("levelup")
+			le.text = ""
 		else:
 			AudioManager.sfx("deny")
-			le.text = ""
-			le.placeholder_text = "Código incorrecto")
+	ok.pressed.connect(redeem)
+	le.text_submitted.connect(func(_t): redeem.call())
 	row.add_child(ok)
 
 
+## Canjea un código. Devuelve {"ok": bool, "msg": String}. «maletindefarks» desbloquea el menú DESARROLLADOR (persistente).
+func redeem_code(text: String) -> Dictionary:
+	var code := text.strip_edges().to_lower()
+	if code == "":
+		return {"ok": false, "msg": "Escribe un código."}
+	if code.sha256_text() == CODE_DEV_HASH:
+		if bool(SaveSystem.setting("dev_unlocked")):
+			return {"ok": true, "msg": "Ya tenías desbloqueado el menú DESARROLLADOR."}
+		SaveSystem.set_setting("dev_unlocked", true)
+		SaveSystem.save_now()
+		Config.dev_mode = true
+		_refresh_dev()
+		return {"ok": true, "msg": "¡Código válido! Se desbloqueó el menú DESARROLLADOR en Ajustes."}
+	return {"ok": false, "msg": "Código no válido."}
+
+
 func _refresh_dev() -> void:
+	if _dev_box == null or not is_instance_valid(_dev_box):
+		return
 	for c in _dev_box.get_children():
+		_dev_box.remove_child(c)
 		c.queue_free()
 	if bool(SaveSystem.setting("dev_unlocked")):
 		Config.dev_mode = true
-		var b := UIKit.button("Abrir herramientas de desarrollo", Vector2(460, 60), 22)
+		var b := UIKit.accent_button("DESARROLLADOR", Vector2(320, 60), 24)
+		b.name = "OpenDev"
 		b.pressed.connect(func():
 			dev_tools_requested.emit()
 			queue_free())
 		_dev_box.add_child(b)
-		var off := UIKit.button("Desactivar modo desarrollador", Vector2(460, 56), 20)
+		var off := UIKit.button("Ocultar menú DESARROLLADOR", Vector2(320, 52), 18)
+		off.name = "DevOff"
 		off.pressed.connect(func():
 			SaveSystem.set_setting("dev_unlocked", false)
 			Config.dev_mode = false

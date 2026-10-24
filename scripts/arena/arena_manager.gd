@@ -5,6 +5,7 @@ extends Node3D
 ## Regla central: la arena NO se completa mientras haya enemigos obligatorios vivos o pendientes.
 
 signal chest_opened(min_rarity: int)
+signal bonus_chest_opened(min_rarity: int)
 signal portal_entered
 signal shop_requested
 signal cleared(index: int)
@@ -50,6 +51,13 @@ var _cleared_t := 0.0
 var _boss_dead_t := -1.0
 var _coin_sfx_t := 0.0
 var chest_taken := false
+## Cofre por rendimiento (v0.11): se decide UNA vez por ronda al completarla (perf_checked) y se guarda con la partida.
+var perf_checked := false
+var perf_result: Dictionary = {}
+var bonus_chest_wanted := false        # la ronda ganó un cofre adicional
+var bonus_taken := false               # ya se abrió
+var _bchest: Interactable
+var _bchest_lid: Node3D
 var nav: NavGrid = null                # navegación de enemigos (rejilla + campo de flujo), ver NavGrid
 var seed_used := 0                     # semilla de esta arena (se guarda para reconstruirla al cargar)
 
@@ -108,7 +116,17 @@ func start(idx: int, seed_value := -1) -> Vector3:
 	phase = Phase.INTRO
 	_intro_t = 2.4
 	chest_taken = false
+	perf_checked = false
+	perf_result = {}
+	bonus_chest_wanted = false
+	bonus_taken = false
 	_cleared_t = 0.0
+	var pl0 = GameState.player
+	if pl0 != null and is_instance_valid(pl0):
+		GameState.round_start_hp = float(pl0.hp)
+		GameState.round_max_hp = float(pl0.max_hp)
+	GameState.round_damage = 0.0
+	LawPerks.on_round_start()
 	GameState.arena_started.emit(idx, kind)
 	Perks.fire("arena_start", {})
 	_announce()
@@ -156,6 +174,7 @@ func _teardown() -> void:
 		world_root.queue_free()
 		world_root = null
 	_chest = null
+	_bchest = null
 	_portal = null
 	_shop = null
 	Terrain.clear()
@@ -365,9 +384,13 @@ func _on_request_spawn(k: String, pos: Vector3) -> void:
 
 
 func _on_enemy_died(e: Enemy) -> void:
-	# monedas: se reparten en varias para que se vea el botín
-	var n := mini(maxi(1, e.coin_value), 7)
-	var each := maxi(1, int(round(float(e.coin_value) / float(n))))
+	if e.kill_paid:
+		return                       # una baja se paga UNA sola vez (aunque la señal de muerte llegue repetida)
+	e.kill_paid = true
+	# monedas: se reparten en varias para que se vea el botín (Honorarios por Victoria / Cliente de Alto Perfil las aumentan)
+	var cv := maxi(1, int(round(float(e.coin_value) * LawPerks.kill_coin_mult(e))))
+	var n := mini(cv, 7)
+	var each := maxi(1, int(round(float(cv) / float(n))))
 	for i in n:
 		_drop_coin(e.global_position + Vector3(0, 0.8, 0), each)
 	if e == _boss_ref and kind == Scaling.KIND_BOSS:
@@ -523,12 +546,99 @@ func _complete() -> void:
 	var bonus := int(round(bld.s("clear_coins") + minf(float(GameState.coins) * bld.s("interest"), 40.0)))
 	if bonus > 0:
 		GameState.add_coins(bonus, false)
+	_pay_round_economy()
+	_evaluate_performance()
 	Perks.fire("arena_clear", {})
 	var heal := GameState.build.s("clear_heal")
 	if heal > 0.0 and GameState.player != null:
 		GameState.player.heal(GameState.player.max_hp * heal)
 	_spawn_rewards()
 	cleared.emit(index)
+
+
+## Economía de fin de ronda (Intereses del Bufete, Cliente de Alto Perfil). Solo se llama al completar la arena (una vez).
+func _pay_round_economy() -> void:
+	var vip := LawPerks.vip_clear(index, kind)
+	if vip > 0:
+		GameState.add_coins(vip, false)
+		GameState.toast_msg("Cliente de Alto Perfil: +%d $" % vip, Color(1.0, 0.85, 0.3))
+	var fi := LawPerks.firm_interest(index, GameState.coins)
+	if fi > 0:
+		GameState.add_coins(fi, false)
+		GameState.toast_msg("Intereses del Bufete: +%d $" % fi, Color(1.0, 0.85, 0.3))
+
+
+## Recompensa por rendimiento: se comprueba UNA sola vez por ronda (perf_checked), con la vida REAL perdida acumulada.
+func _evaluate_performance() -> void:
+	if perf_checked:
+		return
+	perf_checked = true
+	var res := LawPerks.evaluate(GameState.round_damage, GameState.round_max_hp, LawPerks.roll())
+	perf_result = res
+	var pct := int(round(float(res["lost"]) / maxf(GameState.round_max_hp, 1.0) * 100.0))
+	if bool(res["perfect"]):
+		var eff := LawPerks.efficiency_coins(index)
+		if eff > 0:
+			GameState.add_coins(eff, false)
+			GameState.toast_msg("Recompensa por Eficiencia: +%d $" % eff, Color(1.0, 0.85, 0.3))
+		if bool(res["bonus_chest"]):
+			bonus_chest_wanted = true
+			GameState.toast_msg("¡RONDA PERFECTA! ¡BONIFICACIÓN DE RENDIMIENTO: cofre adicional!", Color(1.0, 0.8, 0.3))
+		else:
+			GameState.toast_msg("¡RONDA PERFECTA! (perdiste el %d%% de tu vida) — esta vez no hubo cofre adicional" % pct, Color(0.6, 1.0, 0.7))
+	else:
+		GameState.toast_msg("Perdiste el %d%% de tu vida (máx. 20%%): sin bonificación de rendimiento" % pct, Color(1.0, 0.7, 0.5))
+	GameState.round_perf = res
+
+
+## Todos los cofres de la ronda abiertos (el principal y, si lo hay, el de rendimiento).
+func rewards_done() -> bool:
+	return chest_taken and (not bonus_chest_wanted or bonus_taken)
+
+
+func _spawn_bonus_chest() -> void:
+	var tint := Color(1.0, 0.55, 0.2)
+	var cv := PropsFactory.chest_node(tint)
+	_bchest = Interactable.new()
+	_bchest.kind = "chest"
+	_bchest.prompt = "Abrir cofre de rendimiento"
+	_bchest.action_text = "ABRIR"
+	_bchest.radius = 3.0
+	_bchest.setup_indicator("COFRE EXTRA", 2.7, Color(1.0, 0.65, 0.25))
+	_bchest.add_child(BiomeProps.chest_base(pal, tint))
+	_bchest.add_child(cv["root"])
+	_bchest_lid = cv["lid"]
+	var bpos := _reward_spot(Vector3(-3.5, 0, -5.5))
+	if _chest != null and bpos.distance_to(_chest.position) < 3.5:
+		bpos = _reward_spot(Vector3(-7.5, 0, -2.0))
+	_bchest.position = bpos
+	_bchest.callback = func(_i): _open_bonus_chest()
+	world_root.add_child(_bchest)
+	if GameState.fx != null:
+		GameState.fx.ring(bpos, 3.0, Color(tint.r, tint.g, tint.b, 0.9), 0.7, 0.3)
+
+
+func _open_bonus_chest() -> void:
+	if bonus_taken or _bchest == null or not bonus_chest_wanted:
+		return                # cada cofre se abre una sola vez
+	bonus_taken = true
+	_bchest.enabled = false
+	_bchest.set_indicator("", Color.WHITE, false)
+	AudioManager.sfx("chest")
+	var tw := create_tween()
+	tw.tween_property(_bchest_lid, "rotation:x", -1.9, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if GameState.fx != null:
+		var cp := _bchest.global_position + Vector3(0, 0.8, 0)
+		GameState.fx.burst(cp, Color(1.0, 0.65, 0.25), 22, 7.0, 0.18, 0.8)
+		GameState.fx.flash_sphere(cp, 1.8, Color(1.0, 0.7, 0.3, 0.75), 0.4)
+	GameState.toast_msg("¡Cofre de rendimiento abierto!", Color(1.0, 0.8, 0.3))
+	_try_activate_portal()
+	bonus_chest_opened.emit(0)
+
+
+func _try_activate_portal() -> void:
+	if rewards_done():
+		_activate_portal()
 
 
 func _spawn_rewards() -> void:
@@ -592,6 +702,10 @@ func _spawn_rewards() -> void:
 		_shop.position = _reward_spot(Vector3(0, 0, 5.5))
 		_shop.callback = func(_i): shop_requested.emit()
 		world_root.add_child(_shop)
+	if bonus_chest_wanted:
+		_spawn_bonus_chest()
+		_portal.prompt = "Abre los cofres primero"
+		_portal.set_indicator("ABRE LOS COFRES", Color(0.8, 0.8, 0.9), true)
 
 
 func _reward_spot(pref: Vector3) -> Vector3:
@@ -635,7 +749,7 @@ func _open_chest(min_rarity: int) -> void:
 		GameState.fx.flash_sphere(cp, 1.8, Color(1.0, 0.9, 0.5, 0.75), 0.4)
 		GameState.fx.ring(_chest.global_position, 3.4, Color(1.0, 0.9, 0.4, 0.9), 0.6, 0.3)
 	GameState.toast_msg("¡Cofre abierto! Elige tu recompensa", Color(1.0, 0.9, 0.4))
-	_activate_portal()
+	_try_activate_portal()
 	chest_opened.emit(min_rarity)
 
 
@@ -654,16 +768,27 @@ func _activate_portal() -> void:
 
 ## Reconstruye una arena ya completada tras cargar una partida: aparecen el cofre y el portal.
 ## 'taken': el cofre ya se había abierto y sus cartas elegidas (el portal queda activo).
-func restore_cleared(taken: bool) -> void:
+func restore_cleared(taken: bool, perf: Dictionary = {}) -> void:
 	phase = Phase.CLEARED
 	_queue.clear()
 	GameState.objective_changed.emit("¡Arena completada!", 1.0)
+	# estado del rendimiento de ESTA ronda (la bonificación ya se decidió: no se vuelve a tirar al cargar)
+	perf_checked = true
+	perf_result = perf.get("result", {})
+	bonus_chest_wanted = bool(perf.get("bonus", false))
+	bonus_taken = bool(perf.get("bonus_taken", false)) or (taken and bonus_chest_wanted)
+	var main_taken := taken or bool(perf.get("main_taken", false))
 	_spawn_rewards()
-	if taken:
+	if main_taken:
 		chest_taken = true
 		_chest.enabled = false
 		_chest.set_indicator("", Color.WHITE, false)
 		_chest_lid.rotation.x = -1.9
+	if bonus_taken and _bchest != null:
+		_bchest.enabled = false
+		_bchest.set_indicator("", Color.WHITE, false)
+		_bchest_lid.rotation.x = -1.9
+	if rewards_done():
 		_activate_portal()
 
 

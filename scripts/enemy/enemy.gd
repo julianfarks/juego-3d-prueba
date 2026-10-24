@@ -33,6 +33,7 @@ var dmg_base := 8.0
 var move_speed := 4.0
 var xp_value := 5.0
 var coin_value := 1
+var kill_paid := false               # la recompensa de esta baja ya se pagó (anti doble pago)
 var display_name := ""
 var rig: Rig
 var variant := 0
@@ -115,6 +116,7 @@ func _ready() -> void:
 
 ## Prepara (o recicla) el enemigo. 'v' es el variante visual solo si aún no hay modelo.
 func setup(p_kind: String, p_arena_index: int, p_affix: String, pos: Vector3, p_aggro := 999.0) -> void:
+	kill_paid = false
 	var first := rig == null
 	if first or kind != p_kind:
 		if rig != null:

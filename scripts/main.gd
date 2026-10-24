@@ -126,6 +126,13 @@ func _ready() -> void:
 			dfn.name = "DiffTest"
 			add_child(dfn)
 			dfn.set("main", self)
+	if Config.cmd_flag("--lawtest"):
+		var lwt := load("res://tests/lawtest.gd")
+		if lwt != null:
+			var lwn: Node = lwt.new()
+			lwn.name = "LawTest"
+			add_child(lwn)
+			lwn.set("main", self)
 	if Config.cmd_flag("--endtest"):
 		var ent := load("res://tests/endtest.gd")
 		if ent != null:
@@ -211,6 +218,7 @@ func _build_world() -> void:
 	player.cam = cam
 	player.died.connect(_on_player_died)
 	arena.chest_opened.connect(_on_chest_opened)
+	arena.bonus_chest_opened.connect(_on_bonus_chest_opened)
 	arena.portal_entered.connect(_on_portal)
 	arena.shop_requested.connect(_on_shop)
 	arena.cleared.connect(_on_arena_cleared)
@@ -670,6 +678,7 @@ func _show_region_banner(idx: int, hold: float) -> void:
 	box.offset_bottom = 120.0
 	box.grow_vertical = Control.GROW_DIRECTION_BOTH
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE      # el cartel NUNCA debe tapar ni bloquear toques del centro de la pantalla
 	root.add_child(box)
 	var accent: Color = bm["accent"]
 	var l1 := UIKit.label("REGIÓN %d" % (Scaling.cycle_of(idx) + 1), 30, accent.lightened(0.2), HORIZONTAL_ALIGNMENT_CENTER)
@@ -710,13 +719,15 @@ func _begin_arena(idx: int, instant := false, resume: Dictionary = {}) -> void:
 	var pos := arena.start(idx, int(resume["arena_seed"]) if restoring else -1)
 	if restoring and stage_name != "fight":
 		# la arena ya estaba superada: reaparecen el cofre y el portal tal como estaban
-		arena.restore_cleared(stage_name == "portal")
+		arena.restore_cleared(stage_name == "portal", resume.get("perf", {}))
 		var pp: Array = resume["player_pos"]
 		var rx := clampf(float(pp[0]), -arena.half + 1.5, arena.half - 1.5)
 		var rz := clampf(float(pp[2]), -arena.half + 1.5, arena.half - 1.5)
 		pos = Vector3(rx, Terrain.ground_y(rx, rz) + 0.3, rz)
 	player.teleport_to(pos)
 	player.iframes = maxf(player.iframes, 1.2)
+	if not restoring:
+		_pay_advance_fee(idx)                 # Cobro Anticipado: solo en rondas nuevas, nunca al cargar una partida
 	cam.yaw = 0.0
 	cam.snap_to_target()
 	if idx > 0 and Scaling.zone_pos(idx) == 0 and (not restoring or stage_name == "fight"):
@@ -753,22 +764,47 @@ func _on_arena_cleared(_i: int) -> void:
 	_autosave("reward")
 
 
+func _pay_advance_fee(idx: int) -> void:
+	var fee := LawPerks.advance_fee(idx)
+	if fee > 0:
+		GameState.add_coins(fee, false)
+		GameState.toast_msg("Cobro Anticipado: +%d $" % fee, Color(1.0, 0.85, 0.3))
+
+
 func _on_chest_opened(min_rarity: int) -> void:
-	await get_tree().create_timer(0.5).timeout
-	_open_cards(min_rarity, arena.kind == Scaling.KIND_BOSS)
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	_start_reward(min_rarity, arena.kind == Scaling.KIND_BOSS)
 
 
-func _open_cards(min_rarity: int, second: bool) -> void:
+func _on_bonus_chest_opened(min_rarity: int) -> void:
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	_start_reward(min_rarity, false)
+
+
+## Recompensas de UN cofre: 1 elección, o 2 si es de jefe o le toca «cofre doble» (50%). Nunca más de 2 por cofre:
+## el doble no se acumula con el del jefe. La 2.ª tirada excluye lo ya elegido (sin duplicados accidentales).
+func _start_reward(min_rarity: int, boss: bool) -> void:
+	var total := 1
+	if boss:
+		total = 2
+	elif LawPerks.roll_double(LawPerks.roll()):
+		total = 2
+		GameState.toast_msg("¡COFRE DOBLE! Puedes elegir dos recompensas", Color(1.0, 0.85, 0.3))
+	_reward_pick(min_rarity, 1, total, [])
+
+
+func _reward_pick(min_rarity: int, step: int, total: int, taken: Array) -> void:
 	var cs := CardSelect.new()
+	cs.picked.connect(func(card): taken.append(String(card["id"])))
 	cs.closed.connect(func():
-		if second:
-			await get_tree().create_timer(0.1).timeout
-			_open_cards(maxi(min_rarity - 1, 0), false)
+		if step < total:
+			await get_tree().create_timer(0.1, true, false, true).timeout
+			_reward_pick(maxi(min_rarity - 1, 0), step + 1, total, taken)
 		else:
-			_autosave("portal"))
+			_autosave("portal" if arena.rewards_done() else "reward"))
 	cs.inventory_requested.connect(func(): _open_inventory_over(cs))
 	_open_overlay(cs)
-	cs.open(GameState.arena_index, min_rarity, "chest")
+	cs.open(GameState.arena_index, min_rarity, "chest", 3, taken, step, total)
 
 
 func _on_shop() -> void:
@@ -776,7 +812,7 @@ func _on_shop() -> void:
 	sh.visit = _shop_visit            # misma visita (arena) = mismas ofertas y mismo contador de relanzamientos
 	sh.closed.connect(func():
 		if arena.phase == Arena.Phase.CLEARED:
-			_autosave("portal" if arena.chest_taken else "reward", true))
+			_autosave("portal" if arena.rewards_done() else "reward", true))
 	_open_overlay(sh)
 	sh.open(GameState.arena_index)
 
@@ -906,7 +942,7 @@ func _save_game() -> bool:
 		return false
 	var msg := "Partida guardada"
 	if arena.phase == Arena.Phase.CLEARED:
-		if not _autosave("portal" if arena.chest_taken else "reward", true):
+		if not _autosave("portal" if arena.rewards_done() else "reward", true):
 			return false         # SaveSystem ya mostró el error
 	elif not SaveSystem.has_valid_run():
 		if not _autosave("fight", true):

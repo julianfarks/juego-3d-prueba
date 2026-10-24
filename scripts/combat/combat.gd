@@ -78,6 +78,7 @@ static func calc(enemy: Node3D, base: float, opts: Dictionary) -> Dictionary:
 	pct += Perks.damage_bonus(enemy, opts)          # condiciones (c:), fuentes (s:) y buffs temporales
 	dmg *= maxf(0.1, 1.0 + pct)
 	dmg *= b.s("more_dmg_x")
+	dmg *= LawPerks.damage_mult(enemy, opts)          # Última Palabra, Cadena de Objeciones, Evasión Legal
 	if b.has_synergy("war_machine") and GameState.kill_streak > 0:
 		dmg *= 1.3
 	if enemy.marked_t > 0.0:
@@ -88,12 +89,13 @@ static func calc(enemy: Node3D, base: float, opts: Dictionary) -> Dictionary:
 		dmg *= b.s("skill_dmg_x")
 	var crit := false
 	if not opts.get("no_crit", false):
-		var cc := 0.05 + b.s("crit_chance") + Perks.buff("crit")
+		var cc := 0.05 + b.s("crit_chance") + Perks.buff("crit") + b.s("law_sent")
 		if CASE_FAMILY.has(String(opts.get("src", ""))):
 			cc += b.s("bc_crit")                         # Crítico Contractual: solo impactos del maletín y sus derivados
 		crit = opts.get("force_crit", false) or randf() < cc
 	if crit:
 		dmg *= 1.75 + b.s("crit_mult")
+		dmg *= LawPerks.crit_bonus(enemy)               # Veredicto Final (sinergia)
 	else:
 		dmg *= maxf(0.2, 1.0 - b.s("noncrit_malus"))
 	return {"damage": dmg, "crit": crit}
@@ -107,6 +109,7 @@ static func player_hit(enemy: Node3D, base: float, opts: Dictionary) -> bool:
 	var r := calc(enemy, base, opts)
 	var dmg: float = r["damage"]
 	var crit: bool = r["crit"]
+	LawPerks.after_hit(opts)
 	var info := {
 		"crit": crit, "src": opts.get("src", "slam"),
 		"knock": (opts.get("knock", Vector3.ZERO) as Vector3) * (1.0 + b.s("knock_pow")), "element": opts.get("element", "phys"),
@@ -232,6 +235,7 @@ static func on_kill(enemy: Node3D, info: Dictionary) -> void:
 		player.kill_speed_t = 2.0
 	var src: String = info.get("src", "")
 	Perks.fire("kill", {"enemy": enemy})
+	LawPerks.on_kill(enemy)
 	if b.s("burn_spread") > 0.0 and enemy.burn_t > 0.0 and randf() < b.s("burn_spread"):
 		for e2 in enemies_in_radius(enemy.global_position, 4.5):
 			if e2 != enemy:

@@ -146,11 +146,15 @@ func make_profile() -> Dictionary:
 	p["knock"] = float(Config.SKILLS["slam"]["knock"]) * float(wp.get("knock_x", 1.0)) * (1.0 + b.s("slam_knock")) * 0.45
 	p["curve"] = clampf(float(wp.get("arc", 150.0)) / 150.0 + b.s("slam_arc") / 200.0, 0.35, 1.6)
 	p["homing"] = clampf(b.s("bc_homing"), 0.0, 0.95)
-	p["pierce"] = int(b.s("bc_pierce"))
+	p["pierce"] = int(b.s("bc_pierce")) + int(b.s("law_pierce")) + (1 if b.s("syn_law_papers") > 0.0 and b.s("law_pierce") > 0.0 else 0)
 	p["bounces"] = int(b.s("bc_bounce")) + (2 if b.s("syn_pinball") > 0.0 else 0)
 	p["wall_t"] = (2.5 + b.s("bc_wall")) if b.s("bc_wall") > 0.0 else 0.0
-	p["sharp"] = b.s("bc_sharp") > 0.0
-	p["ret_mult"] = 0.5 + b.s("bc_sharp") if b.s("bc_sharp") > 0.0 else 0.0
+	var law_ret := b.s("law_ret")
+	var syn_case := b.s("syn_law_case") > 0.0
+	p["sharp"] = b.s("bc_sharp") > 0.0 or law_ret > 0.0
+	p["ret_mult"] = (0.5 + b.s("bc_sharp") if b.s("bc_sharp") > 0.0 else 0.0) + law_ret + (0.25 if syn_case and law_ret > 0.0 else 0.0)
+	p["out_mult"] = 1.0 + b.s("law_demo")                      # Maletín Demoledor: daño de ida
+	p["ret_demo"] = syn_case                                   # Doble Sentencia: el bonus de ida también cuenta al volver
 	p["blast"] = b.s("bc_blast")
 	p["blast_r"] = b.s("bc_blast_r")
 	p["pyro"] = b.s("bc_pyro")
@@ -189,6 +193,8 @@ func plan_cases(p: Dictionary) -> Array:
 		plan.append({"mult": b.s("boomerang"), "side": -1.0, "ang": 0.0, "delay": 0.1, "range_x": 0.9})
 	for i in extra:
 		plan.append({"mult": 0.8, "side": 1.0 if i % 2 == 0 else -1.0, "ang": 0.0, "delay": 0.05 * float(i + 1), "range_x": 0.95})
+	if b.s("law_dbl") > 0.0 and LawPerks.roll() < b.s("law_dbl"):
+		plan.append({"mult": 0.65, "side": -1.0, "ang": 0.0, "delay": 0.12, "range_x": 0.9})   # Doble Alegato
 	if b.s("slam_double") > 0.0 and randf() < b.s("slam_double"):
 		plan.append({"mult": 0.8, "side": -1.0, "ang": 0.0, "delay": 0.28, "range_x": 0.9})
 	while plan.size() > MAX_CASES:
@@ -216,6 +222,7 @@ func throw_case(dir: Vector3, mega := false) -> bool:
 		tdist = clampf(td.length(), 2.0, float(p["range"]))
 	_set_hand_visible(false)
 	counts["throws"] += 1
+	LawPerks.on_throw()
 	for i in plan.size():
 		var spec: Dictionary = plan[i]
 		var delay: float = spec["delay"]
@@ -515,6 +522,10 @@ func _impact(c: C, e: Node3D) -> void:
 		hit_mult += 0.25 * float(c.bounces_done)
 	if c.state == "ret":
 		hit_mult *= float(p["ret_mult"])
+		if bool(p.get("ret_demo", false)):
+			hit_mult *= float(p.get("out_mult", 1.0))
+	else:
+		hit_mult *= float(p.get("out_mult", 1.0))
 	var opts := {"src": SRC, "knock": dir * float(p["knock"]), "stagger": 0.12, "area_hits": 1}
 	var hp_before: float = float(e.hp)
 	var killed: bool = Combat.player_hit(e, base * hit_mult, opts)
