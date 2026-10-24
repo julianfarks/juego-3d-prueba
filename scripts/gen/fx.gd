@@ -41,9 +41,9 @@ func _ready() -> void:
 
 
 func apply_quality() -> void:
-	var q := Config.quality()
+	var q := Config.fx_cfg()
 	max_fx = int(q["max_fx"])
-	particle_scale = float(q["fx_particles"])
+	particle_scale = float(q["particles"])
 	numbers_enabled = bool(SaveSystem.setting("damage_numbers"))
 	number_size = clampf(float(SaveSystem.setting("number_size")), 0.5, 1.8)
 	reduce_fx = bool(SaveSystem.setting("reduce_fx"))

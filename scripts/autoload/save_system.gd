@@ -39,7 +39,11 @@ func defaults() -> Dictionary:
 			"sfx": 0.9,
 			"combat_sfx": 0.85,    # volumen de los efectos de combate (0-1 = 0-100 %)
 			"ambient": 0.6,
-			"quality": 1,          # 0 baja, 1 media, 2 alta
+			"quality": 1,          # preset: 0 baja, 1 media, 2 alta
+			"shadow_q": 0,         # sombras: 0 apagadas, 1 bajas, 2 altas
+			"draw_dist": 1,        # distancia de dibujado: 0 corta, 1 media, 2 larga
+			"fx_level": 1,         # efectos: 0 reducidos, 1 normales, 2 completos
+			"render_scale": 0.85,  # escala de renderizado 3D (0.5–1.0)
 			"fps": 60,
 			"camera_sens": 1.0,
 			"joy_zone": 1.0,       # tamaño de la zona donde puede nacer el joystick (0.6–1.4)
@@ -115,6 +119,12 @@ func load_data() -> void:
 			last_load_note = "El guardado estaba dañado y no se pudo recuperar. Se empezó de cero."
 			push_warning("[Save] Guardado ilegible, se usan valores por defecto.")
 		return
+	# v0.9.0: un guardado anterior no tiene los ajustes gráficos sueltos; se parte del preset (Baja/Media/Alta) que tenía elegido
+	var ps: Variant = parsed.get("settings", null)
+	if typeof(ps) == TYPE_DICTIONARY and not (ps as Dictionary).has("shadow_q"):
+		var qi := clampi(int((ps as Dictionary).get("quality", 1)), 0, Config.QUALITY.size() - 1)
+		for k in Config.GFX_KEYS:
+			(ps as Dictionary)[k] = Config.QUALITY[qi][k]
 	data = _merge(defaults(), parsed)
 	data["version"] = SAVE_VERSION
 	_sanitize_after_load()

@@ -91,7 +91,7 @@ func _events() -> Array:
 
 func _run() -> void:
 	await _frames(10)
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(15)
 	main._on_play()
 	var t := 0.0
@@ -768,19 +768,35 @@ func _t9_settings() -> void:
 	SaveSystem.set_setting("combat_sfx", 0.85)
 	SaveSystem.set_setting("music", 0.7)
 	AudioManager.apply_volumes()
-	# el menú de ajustes expone los controles
+	# las páginas de ajustes exponen los controles (AUDIO, AJUSTES y VÍDEO)
 	var sm = load("res://scripts/ui/settings_menu.gd").new()
+	sm.page = "audio"
 	main._ov_root().add_child(sm)
 	await _frames(4)
 	var labels: Array = []
 	for l in sm.find_children("*", "Label", true, false):
 		labels.append((l as Label).text)
-	var sliders: Array = sm.find_children("*", "HSlider", true, false)
-	var toggles: Array = sm.find_children("*", "CheckButton", true, false).map(func(c): return (c as CheckButton).text)
-	ok(labels.has("Efectos de combate") and labels.has("Música") and labels.has("Tamaño de los números"), "T9.7 el menú muestra sliders de música, efectos de combate y tamaño de números")
-	ok(toggles.has("Números de daño") and toggles.has("Reducir efectos con muchos impactos"), "T9.8 el menú muestra los interruptores de números y reducción de efectos")
+	ok(labels.has("Efectos de combate") and labels.has("Música"), "T9.7 la página AUDIO muestra sliders de música y efectos de combate")
 	var pcts := labels.filter(func(s): return String(s).ends_with("%"))
 	ok(pcts.size() >= 4, "T9.9 los sliders muestran porcentajes (%s)" % str(pcts))
+	sm.queue_free()
+	await _frames(3)
+	var sg = load("res://scripts/ui/settings_menu.gd").new()
+	main._ov_root().add_child(sg)
+	await _frames(4)
+	var glabels: Array = []
+	for l in sg.find_children("*", "Label", true, false):
+		glabels.append((l as Label).text)
+	var gtoggles: Array = sg.find_children("*", "CheckButton", true, false).map(func(c): return (c as CheckButton).text)
+	ok(glabels.has("Tamaño de los números") and gtoggles.has("Números de daño"), "T9.8a la página AJUSTES muestra números de daño y su tamaño")
+	sg.queue_free()
+	await _frames(3)
+	sm = load("res://scripts/ui/settings_menu.gd").new()
+	sm.page = "video"
+	main._ov_root().add_child(sm)
+	await _frames(4)
+	var toggles: Array = sm.find_children("*", "CheckButton", true, false).map(func(c): return (c as CheckButton).text)
+	ok(toggles.has("Reducir efectos con muchos impactos"), "T9.8 la página VÍDEO muestra el interruptor de reducción de efectos")
 	await _shot("T9_ajustes")
 	sm.queue_free()
 	_dispose(e)

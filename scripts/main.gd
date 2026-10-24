@@ -1,21 +1,18 @@
 extends Node
 ## Orquestador del juego: crea el mundo 3D, la UI y controla el flujo
-## menú → partida (arenas, cofres, tienda, portales) → derrota/victoria → menú.
+## Vestíbulo del Bufete (primera escena jugable) → partida (arenas, cofres, tienda, portales) → derrota/victoria → Vestíbulo.
 ##
 ## process_mode = ALWAYS (ver main.tscn) para poder gestionar pausas; el mundo 3D se marca PAUSABLE.
 
-enum St { MENU, RUN, ENDED, LOBBY }
+enum St { BOOT, RUN, ENDED, LOBBY }
 
-var state := St.MENU
+var state := St.BOOT
 var world: Node3D
 var fx: FX
 var projectiles: Projectiles
 var cam: CameraRig
 var player: Player
 var arena: Arena
-var stage: Node3D
-var stage_rig: Rig
-var stage_pivot: Node3D
 var lobby: Lobby
 
 var hud_layer: CanvasLayer
@@ -23,7 +20,6 @@ var overlay_layer: CanvasLayer
 var fade_layer: CanvasLayer
 var hud: HUD
 var touch: TouchControls
-var menu: MainMenu
 var fade: ColorRect
 var banner_panel: PanelContainer
 var banner: Label
@@ -36,7 +32,6 @@ var pad_nav: PadNav
 var _transitioning := false
 var _victory_shown := false
 var _end_pending := false
-var _menu_t := 0.0
 var _selftest := false
 
 
@@ -124,9 +119,16 @@ func _ready() -> void:
 			add_child(fnode)
 			fnode.set("main", self)
 		return
-	_show_menu()
-	if SaveSystem.last_load_note != "":
-		notify(SaveSystem.last_load_note, false)
+	if Config.cmd_flag("--starttest"):
+		# esta prueba observa el arranque en frío REAL: se añade y el juego arranca como siempre
+		var stt := load("res://tests/starttest.gd")
+		if stt != null:
+			var stn: Node = stt.new()
+			stn.name = "StartTest"
+			add_child(stn)
+			stn.set("main", self)
+	# Arranque normal: directo al Vestíbulo del Bufete (sin pantalla de menú previa)
+	_enter_lobby(true)
 
 
 # ------------------------------------------------------------------ construcción
@@ -251,7 +253,7 @@ func _open_overlay(n: Control) -> void:
 	get_tree().paused = true
 	n.tree_exited.connect(func():
 		_overlays.erase(n)
-		if _overlays.is_empty() and state != St.ENDED:
+		if _overlays.is_empty() and state != St.ENDED and is_inside_tree():
 			get_tree().paused = false)
 
 
@@ -281,101 +283,23 @@ func _fade_to(a: float, t := 0.25) -> void:
 	await tw.finished
 
 
-# ------------------------------------------------------------------ menú
-func _build_stage() -> void:
-	stage = Node3D.new()
-	stage.name = "MenuStage"
-	world.add_child(stage)
-	var we := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.08, 0.1, 0.18)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.65, 0.85)
-	env.ambient_light_energy = 0.8
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	we.environment = env
-	stage.add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-40, 30, 0)
-	sun.light_energy = 1.2
-	sun.light_color = Color(1.0, 0.92, 0.8)
-	stage.add_child(sun)
-	var rim := OmniLight3D.new()
-	rim.position = Vector3(-2.5, 2.5, -2.0)
-	rim.light_color = Color(0.5, 0.6, 1.0)
-	rim.light_energy = 2.0
-	rim.omni_range = 9.0
-	stage.add_child(rim)
-	var disc := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 2.4
-	cm.bottom_radius = 2.6
-	cm.height = 0.3
-	disc.mesh = cm
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.2, 0.22, 0.3)
-	m.roughness = 0.6
-	disc.material_override = m
-	disc.position.y = -0.15
-	stage.add_child(disc)
-	stage_pivot = Node3D.new()
-	stage.add_child(stage_pivot)
-	stage_rig = ModelFactory.build_lawyer()
-	stage_pivot.add_child(stage_rig)
-	stage_pivot.rotation.y = 0.5
-
-
-func _show_menu() -> void:
-	_cleanup_lobby()
-	state = St.MENU
-	get_tree().paused = false
-	GameState.in_run = false
-	if arena != null:
-		arena._teardown()
-		arena.phase = Arena.Phase.IDLE
-	player.visible = false
-	hud.visible = false
-	touch.visible = false
-	touch.release_all()
-	if stage == null or not is_instance_valid(stage):
-		_build_stage()
-	cam.target = stage_pivot
-	cam.distance = 4.0
-	cam.pivot_height = 1.2
-	cam.shoulder = -1.2
-	cam.pitch = -0.12
-	cam.yaw = 0.35
-	cam.snap_to_target()
-	Engine.time_scale = 1.0
-	if menu != null and is_instance_valid(menu):
-		menu.queue_free()
-	menu = MainMenu.new()
-	menu.play_pressed.connect(_on_play)
-	menu.continue_pressed.connect(_on_continue)
-	menu.lobby_pressed.connect(_enter_lobby)
-	menu.meta_pressed.connect(func(): _open_overlay(_make_meta()))
-	menu.settings_pressed.connect(func(): _open_settings())
-	menu.quit_pressed.connect(func(): get_tree().quit())
-	_ov_root().add_child(menu)
-	AudioManager.play_music("menu")
-	_fade_to(0.0, 0.3)
-
-
-func _make_meta() -> MetaScreen:
-	var m := MetaScreen.new()
-	m.closed.connect(func():
-		if menu != null:
-			menu.queue_free()
-			_show_menu())
-	return m
-
-
-func _open_settings() -> void:
+# ------------------------------------------------------------------ ajustes
+## Abre una página de ajustes: "game" (AJUSTES), "video" (VÍDEO Y GRÁFICOS) o "audio" (AUDIO).
+func _open_settings(page := "game") -> void:
 	var s := SettingsMenu.new()
+	s.page = page
 	s.edit_controls_requested.connect(_begin_edit_controls)
 	s.dev_tools_requested.connect(_open_dev_tools)
 	_open_overlay(s)
+
+
+## CONTROLES (táctil, mando y teclado) directo desde la pausa.
+func _open_controls() -> void:
+	var cm := ControlsMenu.new()
+	cm.edit_controls_requested.connect(func():
+		cm.queue_free()
+		_begin_edit_controls())
+	_open_overlay(cm)
 
 
 func _open_dev_tools() -> void:
@@ -384,12 +308,16 @@ func _open_dev_tools() -> void:
 	_open_overlay(d)
 
 
+var _edit_hidden: Array = []
+
+
 func _begin_edit_controls() -> void:
-	# oculta menús/HUD y deja solo los controles editables
-	if menu != null:
-		menu.visible = false
-	if _pause_menu != null and is_instance_valid(_pause_menu):
-		_pause_menu.visible = false
+	# oculta los menús abiertos y el HUD y deja solo los controles editables
+	_edit_hidden.clear()
+	for o in _overlays:
+		if is_instance_valid(o) and (o as Control).visible:
+			(o as Control).visible = false
+			_edit_hidden.append(o)
 	hud.visible = false
 	touch.visible = true
 	touch.begin_edit()
@@ -399,39 +327,26 @@ func _begin_edit_controls() -> void:
 
 
 func _on_edit_done() -> void:
-	if state == St.MENU:
-		touch.visible = false
-		if menu != null:
-			menu.visible = true
-		get_tree().paused = _overlays.size() > 0
-	else:
-		hud.visible = true
-		if _pause_menu != null and is_instance_valid(_pause_menu):
-			_pause_menu.visible = true
+	hud.visible = state == St.RUN or state == St.LOBBY
+	touch.visible = hud.visible
+	for o in _edit_hidden:
+		if is_instance_valid(o):
+			(o as Control).visible = true
+	_edit_hidden.clear()
+	get_tree().paused = not _overlays.is_empty()
 
 
-func _process(delta: float) -> void:
-	if state == St.MENU and stage_pivot != null and is_instance_valid(stage_pivot):
-		_menu_t += delta
-		cam.yaw += delta * 0.18
-		if stage_rig != null and fmod(_menu_t, 5.0) < delta:
-			stage_rig.play("swing", 0.6)
-
-
-# ------------------------------------------------------------------ Sala Central
-func _enter_lobby() -> void:
+# ------------------------------------------------------------------ Vestíbulo del Bufete
+## Entra al Vestíbulo: es la primera escena jugable al abrir el juego (instant = sin fundido de salida) y a donde
+## se vuelve al terminar o abandonar una partida.
+func _enter_lobby(instant := false) -> void:
 	if _transitioning:
 		return
 	_transitioning = true
-	await _fade_to(1.0, 0.25)
-	if menu != null and is_instance_valid(menu):
-		menu.queue_free()
-	menu = null
-	if stage != null and is_instance_valid(stage):
-		world.remove_child(stage)
-		stage.queue_free()
-		stage = null
-		stage_rig = null
+	if instant:
+		fade.color.a = 1.0          # arranque en frío: negro hasta tener la sala construida
+	else:
+		await _fade_to(1.0, 0.25)
 	get_tree().paused = false
 	GameState.in_run = false
 	if arena != null:
@@ -458,15 +373,19 @@ func _enter_lobby() -> void:
 	hud.visible = true
 	hud.set_lobby(true)
 	touch.visible = true
+	touch.release_all()
 	Engine.time_scale = 1.0
 	AudioManager.play_music("menu")
+	Config.apply_graphics(get_viewport())
 	await _fade_to(0.0, 0.3)
 	_transitioning = false
 	if SaveSystem.last_load_note != "":
 		notify(SaveSystem.last_load_note, false)
 		SaveSystem.last_load_note = ""
+	elif SaveSystem.has_valid_run():
+		notify("Tienes una partida guardada: entra por el portal CONTINUAR PARTIDA", true)
 	else:
-		notify("Sala Central: prepara tu equipo y entra por un portal", true)
+		notify("Vestíbulo del Bufete: prepara tu equipo y entra por un portal", true)
 
 
 func _cleanup_lobby() -> void:
@@ -479,16 +398,6 @@ func _cleanup_lobby() -> void:
 		player.skills.practice = false
 	if hud != null:
 		hud.set_lobby(false)
-
-
-func _lobby_to_menu() -> void:
-	if _transitioning or state != St.LOBBY:
-		return
-	await _fade_to(1.0, 0.25)
-	player.visible = false
-	hud.visible = false
-	touch.visible = false
-	_show_menu()
 
 
 func _on_station(id: String) -> void:
@@ -586,14 +495,6 @@ func _go_to_run(resume: Dictionary) -> void:
 		ztw.tween_property(cam, "distance", 2.6, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await _fade_to(1.0, 0.3)
 	_cleanup_lobby()
-	if menu != null:
-		menu.queue_free()
-		menu = null
-	if stage != null and is_instance_valid(stage):
-		world.remove_child(stage)
-		stage.queue_free()
-		stage = null
-		stage_rig = null
 	_start_run(resume)
 	_transitioning = false
 
@@ -846,9 +747,7 @@ func _end_run(victory: bool, can_continue: bool) -> void:
 	es.retry_pressed.connect(func():
 		es.queue_free()
 		_restart_from_end())
-	es.menu_pressed.connect(func():
-		es.queue_free()
-		_back_to_menu())
+	es.settings_pressed.connect(func(): _open_settings("game"))
 	es.lobby_pressed.connect(func():
 		es.queue_free()
 		get_tree().paused = false
@@ -879,53 +778,88 @@ func _continue_after_victory() -> void:
 	_begin_arena(GameState.arena_index + 1)
 
 
-func _back_to_menu() -> void:
+func _back_to_lobby() -> void:
 	get_tree().paused = false
-	await _fade_to(1.0, 0.25)
-	_show_menu()
+	await _enter_lobby()
 
 
 # ------------------------------------------------------------------ pausa
+## Abre/cierra el menú de pausa (en el Vestíbulo y durante una run). Si hay un submenú abierto encima, lo cierra primero.
 func _toggle_pause() -> void:
-	if state == St.LOBBY:
-		if _overlays.is_empty():
-			_lobby_to_menu()
-		return
-	if state != St.RUN or _transitioning:
+	if _transitioning or (state != St.RUN and state != St.LOBBY):
 		return
 	if _pause_menu != null and is_instance_valid(_pause_menu):
-		_resume()
+		if not _overlays.is_empty() and _overlays.back() != _pause_menu:
+			pad_nav.press_cancel()          # cierra el submenú de arriba (ajustes, inventario…)
+		else:
+			_resume()
 		return
 	if not _overlays.is_empty():
 		return
 	_pause_menu = PauseMenu.new()
+	_pause_menu.context = "run" if state == St.RUN else "lobby"
+	_pause_menu.can_save = _can_save()
 	_pause_menu.resume_pressed.connect(_resume)
 	_pause_menu.settings_pressed.connect(_open_settings)
-	_pause_menu.save_quit_pressed.connect(_save_and_exit)
-	_pause_menu.quit_pressed.connect(func():
+	_pause_menu.controls_pressed.connect(_open_controls)
+	_pause_menu.inventory_pressed.connect(_open_inventory)
+	_pause_menu.save_pressed.connect(_save_game)
+	_pause_menu.leave_save_pressed.connect(_save_and_leave)
+	_pause_menu.abandon_pressed.connect(func():
 		_resume()
 		_end_run(false, false))
+	_pause_menu.records_pressed.connect(func(): _open_overlay(StatsPanel.new()))
+	_pause_menu.meta_pressed.connect(func():
+		var m := MetaScreen.new()
+		m.closed.connect(_lobby_changed)
+		_open_overlay(m))
+	_pause_menu.continue_saved_pressed.connect(func():
+		_resume()
+		_on_continue())
+	_pause_menu.quit_game_pressed.connect(func(): get_tree().quit())
 	_open_overlay(_pause_menu)
 
 
-## Guarda y vuelve al menú. En combate se conserva el último punto de control (inicio de la arena);
-## con la arena superada se guarda justo aquí (cofre/portal).
-func _save_and_exit() -> void:
-	if state != St.RUN or _transitioning:
-		return
-	var msg := "Partida guardada. Puedes continuarla desde el menú."
-	_resume()
+## ¿Es seguro guardar ahora? (en una run, sin transición ni derrota en curso)
+func _can_save() -> bool:
+	return state == St.RUN and GameState.in_run and not _end_pending and not _transitioning
+
+
+## Guarda la partida donde está. En combate se conserva el último punto de control (inicio de la arena);
+## con la arena superada se guarda justo aquí (cofre/portal). Devuelve true si quedó guardada.
+func _save_game() -> bool:
+	if not _can_save():
+		notify("No se puede guardar en este momento.", false)
+		return false
+	var msg := "Partida guardada"
 	if arena.phase == Arena.Phase.CLEARED:
 		if not _autosave("portal" if arena.chest_taken else "reward", true):
-			return        # SaveSystem ya mostró el error; no se sale para no perder la partida
+			return false         # SaveSystem ya mostró el error
 	elif not SaveSystem.has_valid_run():
 		if not _autosave("fight", true):
-			return
+			return false
+		msg = "Partida guardada. Se retomará al inicio de esta arena."
 	else:
 		msg = "Partida guardada. Se retomará al inicio de esta arena."
 		GameState.flush_stats()
 		SaveSystem.save_now()
-	await _back_to_menu()
+	_last_save_msg = msg
+	notify(msg, true)
+	return true
+
+
+var _last_save_msg := ""
+
+
+## Guarda y vuelve al Vestíbulo; si no se pudo guardar, se queda en la partida para no perderla.
+func _save_and_leave() -> void:
+	if not _can_save():
+		return
+	_resume()
+	if not _save_game():
+		return
+	var msg := _last_save_msg + " Continúa desde el portal CONTINUAR."
+	await _back_to_lobby()
 	notify(msg, true)
 
 

@@ -29,7 +29,6 @@ static func _qd(b: MeshBuilder, bt: Transform3D, p0: Vector3, p1: Vector3, p2: V
 #  ENTORNO: cielo, niebla, luz
 # =====================================================================================
 static func environment(root: Node3D, pal: Dictionary, index: int) -> WorldEnvironment:
-	var q: Dictionary = Config.quality()
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
 	var sky := Sky.new()
@@ -58,9 +57,8 @@ static func environment(root: Node3D, pal: Dictionary, index: int) -> WorldEnvir
 	sun.light_color = pal["sun"]
 	sun.light_energy = float(pal["sun_energy"])
 	sun.rotation_degrees = Vector3(float(pal["sun_pitch"]), 38.0 + float(index % 5) * 23.0 + float(int(pal["biome"])) * 31.0, 0.0)
-	sun.shadow_enabled = bool(q["shadows"])
-	sun.directional_shadow_max_distance = 60.0
 	root.add_child(sun)
+	Config.configure_sun(sun)
 	return we
 
 

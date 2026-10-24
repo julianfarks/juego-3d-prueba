@@ -77,7 +77,7 @@ func _finish() -> void:
 
 func _run() -> void:
 	await _frames(10)
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(20)
 	if stage == 1:
 		await _stage1()
@@ -88,13 +88,9 @@ func _run() -> void:
 
 # ------------------------------------------------------------------ etapa 1
 func _stage1() -> void:
-	ok(not SaveSystem.has_valid_run(), "F1 sin partida guardada: no hay botón CONTINUAR")
-	var has_cont := false
-	for b in main.menu.find_children("*", "Button", true, false):
-		if (b as Button).text.begins_with("CONTINUAR"):
-			has_cont = true
-	ok(not has_cont, "F2 el menú no muestra CONTINUAR sin guardado")
-	await _shot("f01_menu_sin_guardado")
+	ok(not SaveSystem.has_valid_run(), "F1 sin partida guardada")
+	ok(not main.lobby.stations["continue"].enabled, "F2 el portal CONTINUAR está desactivado sin guardado")
+	await _shot("f01_vestibulo_sin_guardado")
 	main._on_play()
 	ok(await _wait_state(main.St.RUN), "F3 empieza la partida")
 	await _secs(1.2)
@@ -186,25 +182,19 @@ func _stage2() -> void:
 	var e: Dictionary = JSON.parse_string(f.get_as_text())
 	f.close()
 	ok(SaveSystem.has_valid_run(), "G1 tras reabrir el juego hay partida guardada")
-	var cont: Button = null
-	for b in main.menu.find_children("*", "Button", true, false):
-		if (b as Button).text.begins_with("CONTINUAR"):
-			cont = b
-	ok(cont != null, "G2 el menú muestra CONTINUAR PARTIDA")
-	await _shot("g01_menu_continuar")
+	ok(main.state == main.St.LOBBY and main.lobby.stations["continue"].enabled, "G2 el vestíbulo muestra el portal CONTINUAR PARTIDA activo")
+	await _shot("g01_vestibulo_continuar")
 	# NUEVA PARTIDA no sobrescribe sin avisar
-	for b in main.menu.find_children("*", "Button", true, false):
-		if (b as Button).text.begins_with("NUEVA"):
-			(b as Button).pressed.emit()
+	main._on_station("new_run")
 	await _frames(5)
-	ok(main.state == main.St.MENU and SaveSystem.has_valid_run(), "G3 NUEVA PARTIDA pide confirmación y no borra el guardado")
+	ok(main.state == main.St.LOBBY and SaveSystem.has_valid_run() and not main._overlays.is_empty(), "G3 NUEVA PARTIDA pide confirmación y no borra el guardado")
 	await _shot("g02_confirmar_nueva")
-	for b in main.menu.find_children("*", "Button", true, false):
-		if (b as Button).text == "Cancelar":
-			(b as Button).pressed.emit()
-	await _frames(5)
-	ok(SaveSystem.has_valid_run(), "G4 cancelar conserva la partida guardada")
-	cont.pressed.emit()
+	for bn in main._ov_root().find_children("*", "Button", true, false):
+		if (bn as Button).text == "Cancelar":
+			(bn as Button).pressed.emit()
+	await _frames(8)
+	ok(SaveSystem.has_valid_run() and main._overlays.is_empty(), "G4 cancelar conserva la partida guardada")
+	main._on_station("continue")
 	ok(await _wait_state(main.St.RUN), "G5 CONTINUAR carga la partida")
 	await _secs(1.5)
 	ok(GameState.coins == int(e["coins"]), "G6 monedas recuperadas (%d)" % GameState.coins)
@@ -227,11 +217,12 @@ func _stage2() -> void:
 	# Guardar y salir
 	main._toggle_pause()
 	await _frames(5)
-	main._save_and_exit()
+	main._save_and_leave()
+	ok(await _wait_state(main.St.LOBBY), "G17a Guardar y volver lleva al vestíbulo")
 	await _secs(1.5)
-	ok(main.state == main.St.MENU and SaveSystem.has_valid_run(), "G17 Guardar y salir vuelve al menú con partida guardada")
-	await _shot("g04_menu_tras_guardar")
-	main.menu.continue_pressed.emit()
+	ok(main.state == main.St.LOBBY and SaveSystem.has_valid_run(), "G17 Guardar y volver deja una partida guardada")
+	await _shot("g04_vestibulo_tras_guardar")
+	main._on_station("continue")
 	ok(await _wait_state(main.St.RUN), "G18 se puede continuar tras Guardar y salir")
 	await _secs(1.0)
 	# derrota: la partida deja de ser recuperable

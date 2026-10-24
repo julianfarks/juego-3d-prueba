@@ -3,7 +3,7 @@ extends Control
 ## Pantalla de derrota / victoria con resumen de la partida.
 
 signal retry_pressed
-signal menu_pressed
+signal settings_pressed
 signal continue_pressed
 signal lobby_pressed
 
@@ -58,9 +58,11 @@ func show_summary(sm: Dictionary, can_continue := false) -> void:
 		var retry := UIKit.accent_button("Reintentar", Vector2(300, 70), 28)
 		retry.pressed.connect(func(): retry_pressed.emit())
 		row.add_child(retry)
-	var lob := UIKit.button("Sala Central", Vector2(260, 70), 24)
+	var lob := UIKit.button("VOLVER AL VESTÍBULO", Vector2(300, 70), 22)
+	lob.name = "End_lobby"
 	lob.pressed.connect(func(): lobby_pressed.emit())
 	row.add_child(lob)
-	var menu := UIKit.button("Menú principal", Vector2(260, 70), 24)
-	menu.pressed.connect(func(): menu_pressed.emit())
-	row.add_child(menu)
+	var sbtn := UIKit.button("AJUSTES", Vector2(200, 70), 22)
+	sbtn.name = "End_settings"
+	sbtn.pressed.connect(func(): settings_pressed.emit())
+	row.add_child(sbtn)

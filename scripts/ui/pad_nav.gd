@@ -65,7 +65,7 @@ func _walk(n: Node) -> void:
 		_walk(ch)
 
 
-## Panel modal más reciente (el último fondo atenuado visible) o el menú principal.
+## Panel modal más reciente (el último fondo atenuado visible) 
 func top_scope() -> Control:
 	var best: Node = null
 	for d in get_tree().get_nodes_in_group("pad_dim"):
@@ -75,8 +75,6 @@ func top_scope() -> Control:
 			best = d
 	if best != null:
 		return best.get_parent() as Control
-	if main != null and main.menu != null and is_instance_valid(main.menu) and (main.menu as Control).is_visible_in_tree():
-		return main.menu as Control
 	return null
 
 
@@ -121,13 +119,20 @@ func _input(event: InputEvent) -> void:
 	if not PadInput.pad_mode or PadInput.inst == null or PadInput.inst.capturing:
 		return
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
-		var scope := top_scope()
-		if scope == null:
-			return
-		var btn := _find_cancel(scope, ["cerrar", "volver", "cancelar", "listo", "salir de la tienda", "atrás"] + (["continuar", "reanudar"] if scope is PauseMenu else []))
-		if btn != null:
-			btn.pressed.emit()
+		if press_cancel():
 			get_viewport().set_input_as_handled()
+
+
+## Pulsa el botón de cerrar/volver/cancelar del panel modal más reciente. Devuelve true si había alguno.
+func press_cancel() -> bool:
+	var scope := top_scope()
+	if scope == null:
+		return false
+	var btn := _find_cancel(scope, ["cerrar", "volver", "cancelar", "listo", "salir de la tienda", "atrás"] + (["continuar", "reanudar"] if scope is PauseMenu else []))
+	if btn == null:
+		return false
+	btn.pressed.emit()
+	return true
 
 
 ## Último botón visible de cerrar/volver dentro del panel (el más interior si hay una confirmación encima).

@@ -51,7 +51,6 @@ func spawn_position() -> Vector3:
 func build() -> void:
 	name = "Lobby"
 	_rng.seed = 2024
-	var q: Dictionary = Config.quality()
 	# --- entorno y luz ---
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
@@ -70,9 +69,8 @@ func build() -> void:
 	sun.light_color = PAL["sun"]
 	sun.light_energy = 1.0
 	sun.rotation_degrees = Vector3(-55.0, 25.0, 0.0)
-	sun.shadow_enabled = bool(q["shadows"])
-	sun.directional_shadow_max_distance = 50.0
 	add_child(sun)
+	Config.configure_sun(sun)
 	# --- suelo, muros, horizonte ---
 	Mats.mesh_instance(PropsFactory.floor_mesh(HALF, PAL, _rng), Mats.world_material(), self).name = "Floor"
 	Mats.mesh_instance(PropsFactory.wall_visual(HALF, PAL, _rng), Mats.world_material(), self).name = "WallVisual"

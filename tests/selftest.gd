@@ -59,16 +59,10 @@ func _run() -> void:
 	await _frames(10)
 	Engine.time_scale = 1.0
 	# --- pruebas de controles táctiles (eventos reales) ---
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(30)
-	await _shot("00_menu")
-	main._ov_root().get_child(0).queue_free() if false else null
-	main.menu.queue_free()
-	main.menu = null
-	main.world.remove_child(main.stage)
-	main.stage.queue_free()
-	main.stage = null
-	main._start_run()
+	await _shot("00_vestibulo")
+	await main._go_to_run({})
 	await _frames(20)
 	await _test_touch()
 	Config.dev_god_mode = true

@@ -192,7 +192,7 @@ func _run() -> void:
 		_finish()
 		return
 	await _unit_detection()
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(15)
 	main._on_play()
 	var t := 0.0
@@ -966,9 +966,8 @@ func _controls_ui_tests() -> void:
 
 # ---------------------------------------------------------------- H. sala central y portal
 func _lobby_nav_tests() -> void:
-	await main._back_to_menu()
+	await main._back_to_lobby()
 	await _frames(10)
-	main._enter_lobby()
 	var t := 0.0
 	while main.state != main.St.LOBBY and t < 10.0:
 		await _frames(2)
@@ -1075,7 +1074,7 @@ func _stage2() -> void:
 		if ev is InputEventJoypadMotion and ev.axis == 5:
 			has_rt = true
 	ok(has_rb and not has_rt, "S3 el InputMap ya usa RB para atacar (y no RT) nada más abrir")
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(10)
 	main._on_play()
 	var t := 0.0

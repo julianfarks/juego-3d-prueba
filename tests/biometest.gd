@@ -88,7 +88,7 @@ func _clear_enemies() -> void:
 
 func _run() -> void:
 	await _frames(10)
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(15)
 	main._on_play()
 	var t := 0.0

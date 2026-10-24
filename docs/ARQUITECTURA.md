@@ -9,7 +9,7 @@
 - `scripts/arena/` — `BiomeDB` (6 biomas, datos), `Terrain` (relieve + colisión), `BiomeScenery` (cielo, muros, edificios, fondo en capas), `BiomeProps` (props/tienda/cofre por bioma), `ArenaBuilder` (orden: reservar huecos → terreno → muros/fondo → colocar sobre el suelo), `WaveDirector`, `Arena` (objetivos, oleadas, monedas, cofre/portal/tienda), `Interactable`.
 - `scripts/core/pad_input.gd` — `PadInput`: mandos (detección, dispositivo activo, modo táctil/mando, enlaces guardados, sticks con zona muerta). `scripts/ui/pad_nav.gd` — foco y B/cancelar en menús. `scripts/ui/controls_menu.gd` — Ajustes → CONTROLES.
 - `scripts/ui/` — HUD, controles táctiles editables, cartas, tienda, menús, ajustes, pantalla final, herramientas de desarrollo.
-- `scripts/main.gd` — orquestador del flujo. `tests/selftest.gd` — autojuego.
+- `scripts/main.gd` — orquestador del flujo: arranca en el vestíbulo (`_enter_lobby(true)`), estados `BOOT/LOBBY/RUN/ENDED`, pausa contextual (`PauseMenu.context`), ajustes por páginas (`SettingsMenu.page`: game/video/audio). `tests/selftest.gd` — autojuego.
 
 Decisiones: sin assets externos; un `ShaderMaterial` por personaje; pooling de enemigos/FX/proyectiles; límites de enemigos por calidad.
 Limitación: una partida en curso no se guarda (solo ajustes, mejoras permanentes, récords y estadísticas).
@@ -26,3 +26,7 @@ Flujo de un impacto: `Combat.player_hit/explode/chain_lightning` → `Combat.cal
 `Fx.spawn_number` (pool de `Label3D`, prioridad, agrupación, separación) y `AudioManager.combat_sfx` (bus `Combat` con limitador, presupuesto por ventana, prioridades, antirrepetición).
 `info` admite `silent` (sin número ni sonido: empuje, muerte por jefe), `aoe`/`area` (estilo de área) y `src` (periódico: `burn`, `zone`; combo: `chain`, `nova`, `crit_explosion`, `echo`).
 Ganchos de prueba: `Feedback.record/event_log`, `AudioManager.record_combat/combat_log`, `Fx.num_stats`.
+
+## Arranque y gráficos (v0.9.0)
+Flujo: `main.tscn` → `Main._ready` (mundo, UI, mando, `Config.apply_graphics`) → `_enter_lobby(true)` → `Lobby.build()` → personaje en `spawn_position()`. Volver desde una run (`_save_and_leave`, EndScreen, abandonar) también usa `_enter_lobby`.
+Gráficos: `SaveSystem.settings` guarda `quality` (preset) y los ajustes sueltos `shadow_q`, `draw_dist`, `fx_level`, `render_scale`, `fps`. `Config.apply_preset(i)` copia el preset a los sueltos; `Config.apply_graphics()` los aplica (viewport, FPS, atlas de sombras, luces del grupo `sun_light`, `Camera3D.far`, `FX.apply_quality`). Las luces solares se registran con `Config.configure_sun()`. Los guardados anteriores se migran en `SaveSystem.load_data` (sin `shadow_q` → valores del preset).

@@ -36,6 +36,13 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite modo Dios, saltar de arena, dar mejoras, depuración.
 
+## Novedades 0.9.0 — el juego abre directamente en el Vestíbulo del Bufete
+- **Arranque**: `scenes/main.tscn` → `main.gd` construye el mundo y llama a `_enter_lobby(true)`: la primera pantalla jugable es la escena 3D real del vestíbulo (aparición en `Lobby.spawn_position()`, cámara detrás del personaje). Se eliminó el menú inicial (`MainMenu`, el escenario del personaje sobre la plataforma y el estado `MENU`).
+- **Dónde está ahora cada función del antiguo menú**: NUEVA PARTIDA y CONTINUAR PARTIDA → portales del vestíbulo (y «CONTINUAR PARTIDA GUARDADA» en la pausa del vestíbulo; al abrir con un guardado el vestíbulo lo avisa); El Despacho y Récords → estaciones del vestíbulo y botones de la pausa; Ajustes → pausa; Salir (solo PC) → pausa del vestíbulo.
+- **Pausa completa** (`pause_menu.gd`, botón «II» o Start/Atrás): en el vestíbulo = CONTINUAR, CONTINUAR PARTIDA GUARDADA, RÉCORDS, EL DESPACHO, AJUSTES, VÍDEO Y GRÁFICOS, AUDIO, CONTROLES; en una run = CONTINUAR, INVENTARIO, MI BUILD, GUARDAR PARTIDA, AJUSTES, VÍDEO Y GRÁFICOS, AUDIO, CONTROLES, VOLVER AL VESTÍBULO (confirmación: guardar y volver / abandonar run / cancelar). La pantalla de fin ofrece VOLVER AL VESTÍBULO y AJUSTES.
+- **Vídeo y gráficos reales** (`Config.apply_graphics`): calidad (preset), sombras (apagadas/bajas/altas: sol, atlas y alcance), distancia de dibujado (plano lejano de la cámara 90/140/220), efectos (24/48/80 simultáneos y densidad de partículas), escala de renderizado (50–100 %, `Viewport.scaling_3d_scale`) y límite de FPS (30/60; 90/120 solo si la pantalla lo permite). Se aplican al instante, persisten y se pueden restaurar. Un guardado anterior parte del preset que tenía elegido.
+- Pruebas: `--starttest` (3 etapas: arranque en frío + pausa + vídeo/audio/controles con toques y mando reales; reinicio de la app; guardado antiguo).
+
 ## Novedades 0.8.0 — mandos Xbox/PlayStation, ajustes CONTROLES y joystick táctil corregido
 - **Joystick táctil con zona limitada** (`touch_controls.gd`): solo nace al tocar el cuadrante inferior izquierdo (≤34 % del ancho, ≥45 % de la altura; configurable 0.6–1.4×). Antes cualquier toque en el 46 % izquierdo de la pantalla lo activaba. Aparece bajo el pulgar (con la base siempre dentro de la pantalla), no se activa al tocar botones, inventario o pausa, un segundo dedo no lo roba, y se suelta al pausar/abrir menús. Magnitud ≤ 1 en todas las direcciones (la diagonal no es más rápida), curva suave con zona muerta, sensibilidad ajustable.
 - **Mandos** (`scripts/core/pad_input.gd`, `scripts/ui/pad_nav.gd`): detección por `joy_connection_changed`, dispositivo activo = el último usado, modo automático (al conectar se ocultan los controles táctiles; al desconectar reaparecen) o forzado desde ajustes. Seguro contra «mandos fantasma»: con el mando inactivo 8 s, un toque en pantalla devuelve los controles táctiles. Nombres de botones según Xbox (A/B/X/Y, LB/RB, LT/RT) o PlayStation (Cruz/Círculo/Cuadrado/Triángulo, L1/R1, L2/R2); en Godot los códigos internos son los mismos (posicionales, vía SDL) y solo cambia lo que se muestra.
@@ -102,7 +109,7 @@ Oculto: Ajustes → tocar 7 veces la línea de versión → código. Permite mod
   sobrescribir); "Guardar y salir" en la pausa. Perder o abandonar una partida elimina el guardado.
 - **Cofre**: cartel flotante ABRIR con icono de mano, botón táctil por cercanía, el portal indica que primero
   hay que abrir el cofre. Cada cofre da su recompensa una sola vez.
-- **Sala Central** (menú → Sala Central): portales NUEVA / CONTINUAR PARTIDA, Armería (herramienta, habilidad,
+- **Sala Central / Vestíbulo del Bufete** (desde 0.9.0 es la primera pantalla al abrir el juego): portales NUEVA / CONTINUAR PARTIDA, Armería (herramienta, habilidad,
   estilo, equipo — afectan al combate de verdad), Mesa del Juez (4 dificultades), Despacho (mejoras permanentes),
   Archivo de Casos (estadísticas) y zona de práctica con muñecos.
 - Pruebas: `tests/system_test.tscn` (sin render, 2 procesos), `--flowtest` y `--lobbytest` (con render).

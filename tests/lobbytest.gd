@@ -83,7 +83,7 @@ func _finish() -> void:
 
 func _run() -> void:
 	await _frames(10)
-	main._show_menu()
+	await main._enter_lobby(true)
 	await _frames(20)
 	if stage == 1:
 		await _stage1()
@@ -114,13 +114,9 @@ func _station_ui(id: String) -> void:
 
 
 func _stage1() -> void:
-	# --- entrar a la sala desde el menú ---
-	var lobby_btn: Button = null
-	for b in _buttons(main.menu, "Sala Central"):
-		lobby_btn = b
-	ok(lobby_btn != null, "L1 el menú tiene el botón Sala Central")
-	lobby_btn.pressed.emit()
-	ok(await _wait_state(main.St.LOBBY), "L2 se entra a la Sala Central")
+	# --- el juego abre directamente en el vestíbulo (sin pantalla de menú) ---
+	ok(main.state == main.St.LOBBY and main.lobby != null, "L1 el juego abre directamente en el Vestíbulo del Bufete")
+	ok(await _wait_state(main.St.LOBBY), "L2 se está en el vestíbulo")
 	await _secs(1.0)
 	ok(main.lobby != null and main.lobby.stations.size() == 9, "L3 la sala tiene 9 estaciones (portales, 4 pedestales, dificultad, despacho, archivo)")
 	ok(main.lobby.dummies.size() == 3, "L4 la zona de práctica tiene 3 muñecos")
@@ -264,12 +260,10 @@ func _stage1() -> void:
 	# guardar y salir → sala → CONTINUAR activo
 	main._toggle_pause()
 	await _frames(5)
-	main._save_and_exit()
-	ok(await _wait_state(main.St.MENU), "L37 Guardar y salir vuelve al menú")
-	await _secs(1.0)
-	for b in _buttons(main.menu, "Sala Central"):
-		b.pressed.emit()
-	ok(await _wait_state(main.St.LOBBY), "L38 se vuelve a la sala")
+	main._save_and_leave()
+	ok(await _wait_state(main.St.LOBBY), "L37 Guardar y volver lleva al vestíbulo")
+	await _secs(1.5)
+	ok(main.state == main.St.LOBBY and main.lobby != null, "L38 se vuelve a la sala")
 	await _secs(1.0)
 	var cont: Interactable = main.lobby.stations["continue"]
 	ok(cont.enabled and main.lobby._cont_sub.text.begins_with("Arena 1"), "L39 con partida guardada el portal CONTINUAR se activa")
@@ -282,8 +276,8 @@ func _stage1() -> void:
 	# desde la partida, guardar y salir otra vez para dejar un guardado para la etapa 2
 	main._toggle_pause()
 	await _frames(5)
-	main._save_and_exit()
-	ok(await _wait_state(main.St.MENU), "L42 queda una partida guardada para la siguiente etapa")
+	main._save_and_leave()
+	ok(await _wait_state(main.St.LOBBY), "L42 queda una partida guardada para la siguiente etapa")
 	await _secs(0.5)
 	SaveSystem.save_now()
 
@@ -295,9 +289,7 @@ func _stage2() -> void:
 	ok(LoadoutDB.selected_difficulty() == "partner", "M4 la dificultad elegida persiste")
 	ok(int(SaveSystem.data["meta"]["perm"].get("perm_hp", 0)) == 1, "M5 la mejora permanente comprada persiste")
 	ok(int(SaveSystem.data["stats"]["runs"]) == 1, "M6 las estadísticas persisten (partidas: 1, sin duplicar por reanudar)")
-	for b in _buttons(main.menu, "Sala Central"):
-		b.pressed.emit()
-	ok(await _wait_state(main.St.LOBBY), "M7 se entra a la sala")
+	ok(await _wait_state(main.St.LOBBY), "M7 al reabrir se está directamente en la sala")
 	await _secs(1.0)
 	ok(main.lobby._pedestals["weapon"]["name"].text == "Mazo del Juez", "M8 el pedestal muestra el Mazo tras reiniciar")
 	ok(main.lobby._diff_sign.text == "SOCIO", "M9 la Mesa del Juez muestra Socio tras reiniciar")

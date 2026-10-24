@@ -1,18 +1,28 @@
 class_name SettingsMenu
 extends Control
-## Ajustes: volúmenes independientes, calidad gráfica, FPS, cámara, opciones de juego, editor de
-## controles táctiles y (oculto) acceso al modo desarrollador protegido por código.
+## Ajustes en tres páginas que se abren desde la pausa:
+##   "game"  – AJUSTES: cámara, números de daño, vibración, acceso a CONTROLES y (oculto) modo desarrollador.
+##   "video" – VÍDEO Y GRÁFICOS: calidad, sombras, distancia de dibujado, efectos, escala de render y límite de FPS.
+##   "audio" – AUDIO: música y efectos por separado.
+## Todos los valores se aplican al instante y se guardan en la partida (persisten entre sesiones).
 
 signal closed
 signal edit_controls_requested
 
 const DEV_HASH := "cc22eeb5148b1958e6a9999e4f76bbaf152c7a81079d9218164199d9e2b46d2d"
+const AUDIO_DEFAULTS := {"music": 0.7, "sfx": 0.9, "combat_sfx": 0.85, "ambient": 0.6}
+const TITLES := {"game": "AJUSTES", "video": "VÍDEO Y GRÁFICOS", "audio": "AUDIO"}
 
+var page := "game"
 var _taps := 0
 var _tap_t := 0.0
 var _dev_box: VBoxContainer
 var _vbox: VBoxContainer
 var _dev_tools_requested := false
+var _opt_rows: Array = []        # {key, btns, values, getter}
+var _toggles: Array = []         # {key, cb}
+var _sliders: Array = []         # {key, slider, val, pct}
+var _preset_note: Label
 signal dev_tools_requested
 
 
@@ -23,10 +33,12 @@ func _ready() -> void:
 	var v := UIKit.center_box(self, Vector2(900, 620))
 	var head := HBoxContainer.new()
 	v.add_child(head)
-	var t := UIKit.label("AJUSTES", 42, UIKit.ACCENT)
+	var t := UIKit.label(String(TITLES.get(page, "AJUSTES")), 42, UIKit.ACCENT)
+	t.name = "PageTitle"
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	var close := UIKit.accent_button("Volver", Vector2(200, 60), 26)
+	close.name = "Close"
 	close.pressed.connect(func():
 		SaveSystem.save_now()
 		closed.emit()
@@ -40,20 +52,62 @@ func _ready() -> void:
 	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_vbox.add_theme_constant_override("separation", 10)
 	sc.add_child(_vbox)
-	_section("Audio")
+	match page:
+		"video":
+			_build_video()
+		"audio":
+			_build_audio()
+		_:
+			_build_game()
+
+
+func _build_audio() -> void:
+	_section("Volumen")
 	_slider("Música", "music", 0.0, 1.0, 0.05)
 	_slider("Efectos de combate", "combat_sfx", 0.0, 1.0, 0.05)
 	_slider("Otros efectos", "sfx", 0.0, 1.0, 0.05)
 	_slider("Ambiente", "ambient", 0.0, 1.0, 0.05)
-	_section("Gráficos y rendimiento")
-	_options("Calidad", "quality", ["Baja", "Media", "Alta"])
-	_options("FPS máximos", "fps", ["30", "60"], [30, 60])
+	var rb := UIKit.button("Restaurar audio", Vector2(360, 56), 22)
+	rb.name = "ResetAudio"
+	rb.pressed.connect(func():
+		for k in AUDIO_DEFAULTS.keys():
+			SaveSystem.set_setting(k, AUDIO_DEFAULTS[k])
+		AudioManager.apply_volumes()
+		_sync())
+	_vbox.add_child(rb)
+
+
+func _build_video() -> void:
+	_section("Calidad gráfica")
+	_options("Calidad", "quality", ["Baja", "Media", "Alta"], [], func(i): Config.apply_preset(i))
+	_preset_note = UIKit.label("", 20, UIKit.TEXT_DIM)
+	_preset_note.name = "PresetNote"
+	_vbox.add_child(_preset_note)
+	_section("Ajustes detallados")
+	_options("Sombras", "shadow_q", ["Apagadas", "Bajas", "Altas"])
+	_options("Distancia de dibujado", "draw_dist", ["Corta", "Media", "Larga"])
+	_options("Efectos", "fx_level", ["Reducidos", "Normales", "Completos"])
+	_options("Escala de renderizado", "render_scale", ["50%", "67%", "85%", "100%"], Config.RENDER_SCALES)
+	var fo := Config.fps_options()
+	_options("Límite de FPS", "fps", fo.map(func(x): return str(x)), fo)
 	_toggle("Mostrar FPS", "show_fps")
+	_toggle("Reducir efectos con muchos impactos", "reduce_fx")
+	_vbox.add_child(UIKit.label("Los cambios se aplican al instante. El límite de FPS real depende de la pantalla del dispositivo.", 18, UIKit.TEXT_DIM))
+	var rb := UIKit.button("Restaurar valores predeterminados", Vector2(520, 60), 22)
+	rb.name = "ResetVideo"
+	rb.pressed.connect(func():
+		Config.reset_graphics()
+		_apply_gfx()
+		_sync())
+	_vbox.add_child(rb)
+	_sync()
+
+
+func _build_game() -> void:
 	_section("Juego")
 	_slider("Sensibilidad de cámara", "camera_sens", 0.3, 2.5, 0.05)
 	_toggle("Números de daño", "damage_numbers")
 	_slider("Tamaño de los números", "number_size", 0.6, 1.6, 0.05, true)
-	_toggle("Reducir efectos con muchos impactos", "reduce_fx")
 	_toggle("Vibración", "vibration")
 	_section("Controles")
 	var crow := HBoxContainer.new()
@@ -69,6 +123,7 @@ func _ready() -> void:
 	crow.add_child(cbtn)
 	_section("Acerca de")
 	var ver := UIKit.label("%s  v%s" % [Config.GAME_NAME, Config.VERSION], 20, UIKit.TEXT_DIM)
+	ver.name = "VersionLabel"
 	ver.mouse_filter = Control.MOUSE_FILTER_STOP
 	ver.gui_input.connect(_on_version_input)
 	_vbox.add_child(ver)
@@ -76,6 +131,34 @@ func _ready() -> void:
 	_dev_box = VBoxContainer.new()
 	_vbox.add_child(_dev_box)
 	_refresh_dev()
+
+
+## Aplica al motor lo que hay guardado (escala, FPS, sombras, distancia, efectos).
+func _apply_gfx() -> void:
+	Config.apply_graphics(get_viewport())
+
+
+## Refleja en la interfaz el estado guardado (tras un preset, restaurar, etc.).
+func _sync() -> void:
+	for r in _opt_rows:
+		var cur: Variant = r["get"].call()
+		var vals: Array = r["values"]
+		for i in vals.size():
+			(r["btns"][i] as Button).set_pressed_no_signal(_same(vals[i], cur))
+	for t in _toggles:
+		(t["cb"] as CheckButton).set_pressed_no_signal(bool(SaveSystem.setting(t["key"])))
+	for sl in _sliders:
+		var x := float(SaveSystem.setting(sl["key"]))
+		(sl["slider"] as HSlider).set_value_no_signal(x)
+		(sl["val"] as Label).text = ("%d%%" % int(round(x * 100.0))) if sl["pct"] else "%.2f" % x
+	if _preset_note != null:
+		_preset_note.text = "" if Config.preset_matches() else "Personalizado: has cambiado ajustes sueltos respecto al preset."
+
+
+static func _same(a: Variant, b: Variant) -> bool:
+	if (typeof(a) == TYPE_FLOAT or typeof(a) == TYPE_INT) and (typeof(b) == TYPE_FLOAT or typeof(b) == TYPE_INT):
+		return absf(float(a) - float(b)) < 0.001
+	return a == b
 
 
 func _section(text: String) -> void:
@@ -99,6 +182,8 @@ func _slider(label: String, key: String, lo: float, hi: float, step: float, as_p
 	s.custom_minimum_size = Vector2(400, 44)
 	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var val := UIKit.label("%d%%" % int(round(s.value * 100.0)) if as_pct else "%.2f" % s.value, 22, UIKit.TEXT_DIM)
+	s.name = "Slider_" + key
+	_sliders.append({"key": key, "slider": s, "val": val, "pct": as_pct})
 	s.value_changed.connect(func(x):
 		SaveSystem.set_setting(key, x)
 		val.text = ("%d%%" % int(round(x * 100.0))) if as_pct else "%.2f" % x
@@ -119,35 +204,41 @@ func _toggle(label: String, key: String) -> void:
 	cb.add_theme_font_size_override("font_size", 24)
 	cb.focus_mode = Control.FOCUS_NONE
 	cb.custom_minimum_size = Vector2(0, 54)
+	cb.name = "Toggle_" + key
 	cb.toggled.connect(func(on):
 		SaveSystem.set_setting(key, on)
 		if GameState.fx != null:
 			GameState.fx.apply_quality())
+	_toggles.append({"key": key, "cb": cb})
 	_vbox.add_child(cb)
 
 
-func _options(label: String, key: String, names: Array, values: Array = []) -> void:
+func _options(label: String, key: String, names: Array, values: Array = [], on_pick: Callable = Callable()) -> void:
 	var row := HBoxContainer.new()
 	_vbox.add_child(row)
 	var l := UIKit.label(label, 24)
 	l.custom_minimum_size = Vector2(300, 0)
 	row.add_child(l)
-	var cur: Variant = SaveSystem.setting(key)
+	var vals: Array = values if not values.is_empty() else range(names.size())
 	var btns: Array = []
+	var getter := func() -> Variant:
+		return Config.render_scale() if key == "render_scale" else SaveSystem.setting(key)
 	for i in names.size():
 		var b := UIKit.button(String(names[i]), Vector2(130, 56), 22)
-		var v: Variant = values[i] if not values.is_empty() else i
+		var v: Variant = vals[i]
+		b.name = "Opt_%s_%d" % [key, i]
 		b.toggle_mode = true
-		b.button_pressed = (cur == v)
 		b.pressed.connect(func():
-			SaveSystem.set_setting(key, v)
-			for o in btns:
-				o.button_pressed = (o == b)
-			Config.apply_graphics(get_viewport())
-			if GameState.fx != null:
-				GameState.fx.apply_quality())
+			if on_pick.is_valid():
+				on_pick.call(v)
+			else:
+				SaveSystem.set_setting(key, v)
+			_apply_gfx()
+			_sync())
 		btns.append(b)
 		row.add_child(b)
+	_opt_rows.append({"key": key, "btns": btns, "values": vals, "get": getter})
+	_sync()
 
 
 func _on_version_input(event: InputEvent) -> void:

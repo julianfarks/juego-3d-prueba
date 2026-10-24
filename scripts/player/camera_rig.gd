@@ -23,7 +23,7 @@ func _ready() -> void:
 	cam = Camera3D.new()
 	cam.fov = 68.0
 	cam.near = 0.15
-	cam.far = 220.0
+	cam.far = Config.draw_far()
 	add_child(cam)
 	cam.current = true
 	GameState.cam = self
