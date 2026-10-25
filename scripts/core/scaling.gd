@@ -52,12 +52,19 @@ static func kind_of(arena_index: int) -> String:
 ## No leen la build, la tienda, los cofres ni el portal: la dificultad y el poder del jugador son sistemas separados.
 static func hp_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["hp_lin"]) * arena_index) * pow(float(c["hp_exp"]), arena_index) * dev_mult * diff_x("hp_x")
+	return minf((1.0 + float(c["hp_lin"]) * arena_index) * pow(float(c["hp_exp"]), _exp_arena(arena_index)), float(c["hp_cap"])) * dev_mult * diff_x("hp_x")
 
 
 static func dmg_mult(arena_index: int) -> float:
 	var c := Config.SCALING
-	return (1.0 + float(c["dmg_lin"]) * arena_index) * pow(float(c["dmg_exp"]), arena_index) * (1.0 + (dev_mult - 1.0) * 0.5) * diff_x("dmg_x")
+	return minf((1.0 + float(c["dmg_lin"]) * arena_index) * pow(float(c["dmg_exp"]), _exp_arena(arena_index)), float(c["dmg_cap"])) * (1.0 + (dev_mult - 1.0) * 0.5) * diff_x("dmg_x")
+
+
+## SUPERVIVENCIA INFINITA: la parte exponencial deja de crecer en 'exp_arena_cap'; a partir de ahí la dificultad sigue
+## subiendo de forma LINEAL (sin fin de partida) y, además, vida y daño tienen un techo numérico seguro (hp_cap/dmg_cap).
+## Hasta esa arena la curva es exactamente la de siempre.
+static func _exp_arena(arena_index: int) -> float:
+	return float(mini(maxi(arena_index, 0), int(Config.SCALING["exp_arena_cap"])))
 
 
 ## Cantidad: 1 + (tope-1)·(1 - e^(-k·a/(tope-1))). Pendiente inicial = count_per_arena y satura sin escalones.
@@ -100,9 +107,9 @@ static func attack_pace(arena_index: int) -> float:
 	return maxf(float(c["pace_min"]), 1.0 - float(c["pace_per_arena"]) * arena_index)
 
 
-## Número de élites en una arena de élites (crece 1 cada ~9 arenas).
+## Número de élites en una arena de élites (crece 1 cada ~9 arenas, con tope: nunca una oleada descontrolada).
 static func elite_count(arena_index: int) -> int:
-	return 1 + arena_index / 9
+	return mini(1 + arena_index / 9, int(Config.SCALING["elite_cap"]))
 
 
 ## Duración de la arena de supervivencia (s).

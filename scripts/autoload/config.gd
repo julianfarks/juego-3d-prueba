@@ -4,7 +4,7 @@ extends Node
 ## cada enemigo individualmente.
 
 const GAME_NAME := "LAWYER MAYHEM 3D"
-const VERSION := "0.13.1"
+const VERSION := "0.14.0"
 
 # Capas de física (máscaras de bits)
 const L_WORLD := 1
@@ -48,6 +48,9 @@ const SCALING := {
 	"arenas_per_zone": 5,           # solo rota el TIPO de arena (eliminación, supervivencia…); no sube la dificultad
 	"hp_lin": 0.09, "hp_exp": 1.03,        # vida = (1 + lin·a) · exp^a
 	"dmg_lin": 0.045, "dmg_exp": 1.02,       # daño = (1 + lin·a) · exp^a
+	"exp_arena_cap": 60,                  # la parte exponencial se congela aquí; después el crecimiento es lineal (partida infinita)
+	"hp_cap": 5000.0, "dmg_cap": 80.0,    # techos numéricos seguros (multiplicador sobre la vida/daño base)
+	"elite_cap": 6,                       # máx. élites en una arena de élites
 	"count_per_arena": 0.06, "count_cap": 4.0,   # cantidad: crece y satura suavemente hacia el tope
 	"spawn_interval_base": 2.3,
 	"spawn_interval_decay": 0.94,
