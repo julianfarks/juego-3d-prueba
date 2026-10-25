@@ -368,9 +368,134 @@ static func ground_details(root: Node3D, half: float, pal: Dictionary, rng: Rand
 	if id == "urban":
 		var mk := Mats.mesh_instance(urban_markings(half, pal), Mats.world_material(), root)
 		mk.name = "StreetMarkings"
+		var jr := RandomNumberGenerator.new()
+		jr.seed = 4242 + int(half)
+		judicial_details(root, half, pal, jr)
+	if id == "urban" or id == "court":
+		_paper_wind(root, half)
 	var dd := Mats.mesh_instance(doodads(id, half, pal, rng, circles, 70 if id == "urban" else 90), Mats.world_material(), root)
 	dd.name = "Doodads"
 	ambient_fx(root, half, pal)
+
+## Personalidad urbana (Task L): acera con bordillo, letreros judiciales en postes, guirnaldas de luces. Todo sin colisión,
+## fuera de la zona de juego (junto al muro o detrás) y en pocas mallas estáticas.
+const SIGN_TEXTS := ["BUFETE & ASOCIADOS", "JUZGADO Nº 3", "NOTARÍA", "FIANZAS 24H", "ABOGADOS · DIVORCIOS", "TRIBUNAL DE FALTAS", "HABEAS CORPUS S.L.", "OBJECIÓN!"]
+
+static func judicial_details(root: Node3D, half: float, pal: Dictionary, rng: RandomNumberGenerator) -> void:
+	var b := MeshBuilder.new()
+	var hint := Vector3(0, -3, 0)
+	# --- acera + bordillo pegados al muro (por dentro, 1,6 m: la arena sigue despejada) ---
+	var walk := Color(0.36, 0.36, 0.36)
+	var curb := Color(0.62, 0.6, 0.55)
+	var seg := 2.0
+	var n := int(half * 2.0 / seg)
+	for side in 4:
+		for i in n:
+			var t0 := -half + i * seg
+			var t1 := t0 + seg
+			var pts: Array = []
+			for pair in [[t0, half - 1.6], [t1, half - 1.6], [t1, half - 0.2], [t0, half - 0.2]]:
+				var u: float = pair[0]
+				var v: float = pair[1]
+				var pt := Vector3.ZERO
+				match side:
+					0: pt = Vector3(u, 0, -v)
+					1: pt = Vector3(u, 0, v)
+					2: pt = Vector3(-v, 0, u)
+					3: pt = Vector3(v, 0, u)
+				pt.y = Terrain.ground_y(pt.x, pt.z) + 0.05
+				pts.append(pt)
+			b.quad(pts[0], pts[1], pts[2], pts[3], hint, walk.lerp(curb, 0.12 * float(i % 2)))
+			# bordillo: franja estrecha en el lado interior
+			var q0: Vector3 = pts[0]
+			var q1: Vector3 = pts[1]
+			var o := (Vector3(0, 0, 1) if side < 2 else Vector3(1, 0, 0)) * (0.16 * (1.0 if side == 0 or side == 2 else -1.0))
+			b.quad(q0 + Vector3(0, 0.02, 0), q1 + Vector3(0, 0.02, 0), q1 + o + Vector3(0, 0.02, 0), q0 + o + Vector3(0, 0.02, 0), hint, curb)
+	var m := Mats.mesh_instance(b.build(), Mats.world_material(), root)
+	m.name = "Sidewalk"
+	# --- letreros judiciales sobre postes, fuera del muro (se ven por encima de la barrera) ---
+	var sb := MeshBuilder.new()
+	var holder := Node3D.new()
+	holder.name = "JudicialSigns"
+	root.add_child(holder)
+	var spots := [[0, -0.55], [0, 0.5], [1, -0.4], [1, 0.62], [2, -0.5], [2, 0.45], [3, -0.6], [3, 0.5]]
+	var texts := SIGN_TEXTS.duplicate()
+	for k in spots.size():
+		var side: int = spots[k][0]
+		var along: float = float(spots[k][1]) * half + rng.randf_range(-1.5, 1.5)
+		var d := half + 3.4
+		var pos := Vector3.ZERO
+		var yaw := 0.0
+		match side:
+			0: pos = Vector3(along, 0, -d); yaw = 0.0
+			1: pos = Vector3(along, 0, d); yaw = 180.0
+			2: pos = Vector3(-d, 0, along); yaw = 90.0
+			3: pos = Vector3(d, 0, along); yaw = -90.0
+		pos.y = Terrain.ground_y(pos.x, pos.z)
+		var bt := Transform3D(Basis.from_euler(Vector3(0, deg_to_rad(yaw), 0)), pos)
+		var hgt := rng.randf_range(4.2, 5.4)
+		var board := Color(0.14, 0.15, 0.2) if k % 2 == 0 else Color(0.2, 0.1, 0.1)
+		sb.box(Vector3(0.18, hgt, 0.18), bt * MeshBuilder.xf(Vector3(-1.9, hgt * 0.5, 0)), Color(0.25, 0.25, 0.28))
+		sb.box(Vector3(0.18, hgt, 0.18), bt * MeshBuilder.xf(Vector3(1.9, hgt * 0.5, 0)), Color(0.25, 0.25, 0.28))
+		sb.box(Vector3(4.4, 1.15, 0.14), bt * MeshBuilder.xf(Vector3(0, hgt, 0)), board)
+		sb.box(Vector3(4.5, 0.08, 0.2), bt * MeshBuilder.xf(Vector3(0, hgt + 0.6, 0)), Color(0.85, 0.65, 0.25))
+		var l := Label3D.new()
+		l.text = String(texts[k % texts.size()])
+		l.font_size = 40
+		l.pixel_size = 0.0125
+		l.outline_size = 3
+		l.modulate = Color(0.98, 0.86, 0.5) if k % 2 == 0 else Color(0.95, 0.92, 0.85)
+		l.outline_modulate = Color(0, 0, 0, 0.8)
+		l.shaded = false
+		l.double_sided = false
+		l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		l.visibility_range_end = 70.0
+		holder.add_child(l)
+		l.transform = bt * MeshBuilder.xf(Vector3(0, hgt, 0.09))
+		# guirnalda de luces entre dos postes: bombillas pequeñas en catenaria (emisivas, sin luz dinámica)
+		if k % 2 == 0:
+			for j in 9:
+				var u := float(j) / 8.0
+				var sag := sin(u * PI) * 0.55
+				var c2 := MeshBuilder.glow(Color(1.0, 0.85, 0.5) if j % 2 == 0 else Color(1.0, 0.6, 0.35), 1.4)
+				sb.box(Vector3(0.16, 0.16, 0.16), bt * MeshBuilder.xf(Vector3(-1.9 + 3.8 * u, hgt - 0.55 - sag, 0.0)), c2)
+	var sm := Mats.mesh_instance(sb.build(), Mats.world_material(), root)
+	sm.name = "SignPosts"
+	sm.visibility_range_end = 90.0
+
+
+## Papeles que el viento arrastra por la calle: pocas piezas planas, sin sombra, sin colisión.
+static func _paper_wind(root: Node3D, half: float) -> void:
+	var amount := int(round(14.0 * float(Config.fx_cfg()["particles"])))
+	if amount <= 0:
+		return
+	var ps := CPUParticles3D.new()
+	ps.name = "WindPapers"
+	ps.amount = amount
+	ps.lifetime = 9.0
+	ps.preprocess = 9.0
+	ps.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	ps.emission_box_extents = Vector3(half, 0.6, half)
+	ps.position = Vector3(0, 0.8, 0)
+	ps.direction = Vector3(1.0, 0.15, 0.35)
+	ps.spread = 18.0
+	ps.gravity = Vector3(0, -0.02, 0)
+	ps.initial_velocity_min = 1.6
+	ps.initial_velocity_max = 3.2
+	ps.angular_velocity_min = -220.0
+	ps.angular_velocity_max = 220.0
+	ps.local_coords = true
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.36, 0.02, 0.48)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.93, 0.9, 0.8)
+	bm.material = mat
+	ps.mesh = bm
+	ps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ps.visibility_range_end = 60.0
+	root.add_child(ps)
+
 
 
 ## Pequeñas partículas ambientales discretas (pocas, sin sombras): polvo, luciérnagas, chispas, motas mágicas.

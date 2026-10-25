@@ -605,6 +605,14 @@ func _impact(c: C, e: Node3D) -> void:
 		impact_log.append({"case": c.idx, "state": c.state, "enemy": e.get_instance_id(), "killed": killed, "hp_before": hp_before, "base": base * hit_mult, "t": _clock})
 	if GameState.fx != null:
 		GameState.fx.burst(ipos + Vector3(0, 1.0, 0), Color(1.0, 0.92, 0.65), 6, 5.0, 0.12, 0.3)
+	if GameState.fx != null:
+		# identidad visual de la trayectoria: atravesar = estela azulada; rebotar entre enemigos = anillo verde
+		var hd: Vector3 = Vector3(c.heading.x, 0.0, c.heading.z).normalized()
+		if c.pierce_left > 0 and not c.ghost:
+			GameState.fx.beam(ipos + Vector3(0, 1.0, 0) - hd * 1.8, ipos + Vector3(0, 1.0, 0) + hd * 1.8, Color(0.6, 0.9, 1.0, 0.85), 0.1, 0.18)
+		if c.state == "bounce" and not c.ghost:
+			GameState.fx.ring(ipos, 1.7, Color(0.45, 1.0, 0.65, 0.75), 0.26, 0.3, 0.1)
+			GameState.fx.burst(ipos + Vector3(0, 1.0, 0), Color(0.5, 1.0, 0.7), 4, 6.0, 0.1, 0.3)
 	if GameState.cam != null and _shake_t <= 0.0:
 		_shake_t = 0.12
 		GameState.cam.shake(0.14 if not c.mega else 0.6)

@@ -1022,6 +1022,11 @@ func _fx_impact(pos: Vector3, radius: float, shake: float) -> void:
 	if fx != null:
 		fx.ring(pos, radius, Color(1.0, 0.55, 0.25, 0.8), 0.3, 0.3)
 		fx.burst(pos + Vector3(0, 0.3, 0), Color(0.9, 0.8, 0.6), 5, 4.0, 0.12, 0.35)
+		if is_boss:
+			# los ataques especiales del jefe pesan más: onda interior, escombros y papeles del bufete
+			fx.ring(pos, radius * 0.55, Color(1.0, 0.9, 0.6, 0.7), 0.22, 0.2, 0.14)
+			fx.flash_sphere(pos + Vector3(0, 0.6, 0), minf(radius * 0.4, 3.0), Color(1.0, 0.6, 0.3, 0.55), 0.18)
+			fx.paper_burst(pos + Vector3(0, 0.8, 0), 8, 6.0)
 	var p = GameState.player
 	if shake > 0.0 and p != null and GameState.cam != null:
 		if global_position.distance_to(p.global_position) < 18.0:
