@@ -343,7 +343,7 @@ func _update_overlay() -> void:
 			var banner: bool = bt[3] == "banner" and not vertical
 			if banner:
 				_big.text = _big.text.replace("\n", " ")           # una sola línea en su propia franja superior
-			_big.add_theme_font_size_override("font_size", (68 if banner else 92) if not vertical else 96)
+			_big.add_theme_font_size_override("font_size", (58 if banner else 92) if not vertical else 96)
 			var tin := clampf((G - bt[1]) / 0.16, 0.0, 1.0)
 			var tout := clampf((bt[2] - G) / 0.22, 0.0, 1.0)
 			_big.modulate.a = minf(tin, tout)
