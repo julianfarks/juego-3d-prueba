@@ -1,6 +1,6 @@
 # LAWYER MAYHEM 3D
 
-Roguelike 3D en tercera persona para Android (Godot 4.3 · GDScript). Eres un abogado de dibujos animados
+Roguelike 3D en tercera persona para **Android y Windows (64 bits)** (Godot 4.3 · GDScript), un único proyecto con dos distribuciones. Eres un abogado de dibujos animados
 que reparte "sentencias" con su maletín en arenas llenas de ladrones, élites y jefes. Inspirado en la estructura
 de los roguelikes de arenas (cofres, cartas, builds), pero con contenido 100 % original y procedural
 (modelos, animaciones, iconos, audio).
@@ -18,7 +18,17 @@ de los roguelikes de arenas (cofres, cartas, builds), pero con contenido 100 % o
 - Móvil: joystick izquierdo (flotante), arrastra a la derecha para la cámara, botones: **ATACAR** (lanza el maletín bumerán),
   **DOCS**, **ESQUIVAR**, **SALTAR** y USAR (cofres, portales, tienda). SELLO y OBJECIÓN ya no son botones (ver 0.6.0).
   Ajustes → *Editar controles* permite mover y cambiar el tamaño de cada botón.
-- PC (pruebas): WASD, flechas = cámara, J/Ctrl atacar, Espacio saltar, Shift esquivar, Q documentos, F usar, Esc pausa.
+- PC (Windows): WASD mover · ratón = cámara · clic izquierdo atacar · clic derecho documentos (Q) · Espacio saltar · Shift esquivar · F/E usar · I inventario · Esc pausa. Mando compatible. Detalle en `dist/LEEME-Windows.txt`.
+
+## Instalar y ejecutar
+**Android**: descarga `LawyerMayhem3D-debug.apk` de la release `ultima-version`, permite «orígenes desconocidos» e instálalo.
+
+**Windows (64 bits)**: descarga `LawyerMayhem3D-Windows-x64.zip` de la misma release, extrae **toda** la carpeta y ejecuta `LawyerMayhem3D.exe`
+(`LawyerMayhem3D.pck` debe estar al lado; `LawyerMayhem3D.console.exe` muestra los errores si algo falla). No requiere instalación.
+Windows puede avisar con SmartScreen porque el ejecutable no está firmado.
+
+El modo PC (sin controles táctiles, ratón capturado en combate, opciones de pantalla/VSync/FPS y calidad «Máxima») se activa solo en Windows
+(característica `pcgame` del preset de exportación). Las partidas de PC y de Android son independientes (cada una usa el `user://` de su plataforma).
 
 ## Flujo
 Arena de eliminación → supervivencia → desafío (minijefe) → élite → jefe de zona. Cada arena completada da un cofre
@@ -27,6 +37,11 @@ en `scripts/core/scaling.gd`). **Supervivencia infinita (0.14.0):** no hay victo
 
 ## Estructura
 Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy).
+
+## Compilar la versión de Windows
+Con las plantillas de exportación de Godot 4.3 instaladas: `godot --headless --path . --export-release "Windows" dist/Windows/LawyerMayhem3D.exe`
+(genera `.exe` + `.pck` + `.console.exe`; el workflow también crea `LawyerMayhem3D-Windows-x64.zip` y lo añade a la release). `dist/Windows/` no se versiona.
+Prueba del modo PC: `godot --path . -- --pcmode --pctest`.
 
 ## Compilar el APK
 1. Subir a GitHub: el workflow descarga Godot 4.3 + plantillas, crea un keystore de depuración *en el runner*

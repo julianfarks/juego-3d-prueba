@@ -1,0 +1,31 @@
+LAWYER MAYHEM 3D - versión para Windows (64 bits)
+=================================================
+
+INSTALAR
+  1. Extrae TODO el contenido del ZIP en una carpeta (no ejecutes el .exe desde dentro del ZIP).
+  2. Mantén juntos LawyerMayhem3D.exe y LawyerMayhem3D.pck (el .pck contiene el juego).
+  3. Doble clic en LawyerMayhem3D.exe. No necesita instalación ni permisos de administrador.
+  Si Windows muestra "SmartScreen": Más información > Ejecutar de todas formas (el ejecutable no está firmado).
+  Si el juego no abre, ejecuta LawyerMayhem3D.console.exe: muestra una consola con los mensajes de error.
+
+CONTROLES (teclado y ratón)
+  W A S D ........ mover
+  Ratón .......... girar la cámara (el cursor se captura mientras juegas)
+  Clic izquierdo . atacar (lanzar el maletín)
+  Clic derecho ... Documentos Teledirigidos      (también Q)
+  Espacio ........ saltar
+  Shift .......... esquivar
+  F o E .......... interactuar (cofres, portales, tienda)
+  I .............. inventario de mejoras
+  Esc ............ pausa y opciones (el cursor queda libre en los menús)
+  Flechas ........ cámara con teclado
+  Mando .......... compatible (Xbox/PlayStation); si hay mando conectado el juego muestra sus botones.
+  Las teclas se pueden cambiar en Pausa > CONTROLES > TECLADO Y RATÓN.
+
+OPCIONES
+  Pausa > VÍDEO Y GRÁFICOS: modo de pantalla (ventana / sin bordes / completa), resolución, VSync,
+  calidad (Baja, Media, Alta, Máxima), sombras, distancia de dibujado, efectos, escala de render y límite de FPS.
+  Pausa > CÁMARA: distancia, altura, inclinación, sensibilidad horizontal/vertical e invertir eje vertical.
+
+PARTIDAS GUARDADAS
+  Se guardan en %APPDATA%\Godot\app_userdata\Lawyer Mayhem 3D\ (independientes de las de Android).

@@ -296,6 +296,8 @@ func _t8_fps_independence() -> void:
 	for cap in [30, 144]:
 		SaveSystem.set_setting("fps", cap)
 		Config.apply_graphics(get_viewport())
+		player.global_position = Vector3(0, 1.0, 0)
+		player.velocity = Vector3.ZERO
 		await _secs(0.5)
 		var p0: Vector3 = player.global_position
 		var t0 := Time.get_ticks_msec()
@@ -304,11 +306,8 @@ func _t8_fps_independence() -> void:
 		await _key(KEY_D, false)
 		var dt := float(Time.get_ticks_msec() - t0) / 1000.0
 		res[cap] = player.global_position.distance_to(p0) / dt
-		await _secs(0.4)
-		await _key(KEY_A, true)
-		await _secs(1.0)
-		await _key(KEY_A, false)
 	print("[INFO] velocidad lateral con 30 FPS: %.2f m/s, con 144 FPS: %.2f m/s" % [res[30], res[144]])
+	ok(res[30] > 3.0 and res[144] > 3.0, "P8.0 el personaje se desplaza a velocidad normal (>3 m/s)")
 	ok(absf(res[30] - res[144]) / maxf(res[30], res[144]) < 0.12, "P8.1 la velocidad de movimiento no depende del límite de FPS")
 	SaveSystem.set_setting("fps", 0)
 	Config.apply_graphics(get_viewport())
