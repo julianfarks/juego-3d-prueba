@@ -112,7 +112,7 @@ func _run() -> void:
 # 1. controles táctiles ocultos / inertes en PC
 func _t1_touch_hidden() -> void:
 	ok(main.touch.suppressed, "P1.1 los controles táctiles están suprimidos en PC")
-	var pos := main.touch.joy_zone().get_center()
+	var pos: Vector2 = main.touch.joy_zone().get_center()
 	var ev := InputEventScreenTouch.new()
 	ev.index = 3
 	ev.position = pos
