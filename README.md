@@ -36,6 +36,11 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Ajustes → **CÓDIGOS** → escribir el código de desarrollador → aparece el menú **DESARROLLADOR** en Ajustes (se recuerda entre sesiones; se puede ocultar). Permite sumar dinero y honorarios (botones o cantidad libre), agregar cualquier mejora con rareza y cantidad (respetando sus máximos), modo Dios, saltar de arena y depuración. El código se guarda solo como hash SHA-256.
 
+## Novedades 0.13.1 — cofre desplazable y herramienta en la mano
+
+- **Cofre**: las cartas van en una zona desplazable con el dedo (cabecera y botones fijos); la carta se elige al soltar, así que deslizar no selecciona. Prueba: `--chesttest`.
+- **Herramienta en la mano**: el Mazo del Juez y la Pluma Estilete tienen su propio modelo 3D en la mano (y al lanzarlos), según la herramienta equipada. Prueba: `--handtest`.
+
 ## Novedades 0.13.0 — efectos de combate, ciudad con más personalidad y rendimiento
 
 - **Impactos por familia**: papeles al golpear con el maletín, destello y anillo dorado en críticos, onda de choque en golpes masivos, brasas/esquirlas/arco eléctrico por elemento, estela al atravesar y anillo al rebotar, ataques de jefe más contundentes y avisos «¡CASO RESUELTO!» al derrotar. Con presupuesto por nivel de efectos (Reducidos/Normales/Completos).

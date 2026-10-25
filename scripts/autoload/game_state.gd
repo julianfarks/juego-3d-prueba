@@ -104,6 +104,17 @@ func _apply_setup(lo: Dictionary, diff_id: String) -> void:
 	Scaling.set_difficulty(difficulty_id)
 	weapon_params = LoadoutDB.weapon_params(loadout)
 	build.loadout_stats = LoadoutDB.total_stats(loadout)
+	refresh_hand_weapon()
+
+
+## El objeto que sostiene el personaje sigue SIEMPRE a la herramienta realmente equipada (loadout), no al texto de la UI.
+func hand_weapon_id() -> String:
+	return String(loadout.get("weapon", "case"))
+
+
+func refresh_hand_weapon() -> void:
+	if player != null and is_instance_valid(player) and player.get("rig") != null:
+		ModelFactory.set_hand_weapon(player.rig, hand_weapon_id())
 
 
 func _reset_flush() -> void:
@@ -246,6 +257,7 @@ func restore_run(r: Dictionary) -> void:
 	difficulty_id = String(r["difficulty"])
 	Scaling.set_difficulty(difficulty_id)
 	weapon_params = LoadoutDB.weapon_params(loadout)
+	refresh_hand_weapon()
 	var perm: Dictionary = SaveSystem.data["meta"]["perm"]
 	build.restore(r["picks"], perm, LoadoutDB.total_stats(loadout), level)
 	coins_changed.emit(coins)
