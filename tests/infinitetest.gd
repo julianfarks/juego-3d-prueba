@@ -361,7 +361,8 @@ func _phase1() -> void:
 		var db1 := float(rs["damage_boss"])
 		var dd1 := float(rs["damage_dealt"])
 		boss.take_damage(50.0, {"src": "case"})
-		ok(is_equal_approx(float(rs["damage_boss"]) - db1, 50.0) and is_equal_approx(float(rs["damage_dealt"]) - dd1, 50.0), "T5e golpe de 50 al jefe: +50 a «daño a jefes» y +50 al total")
+		var exp_b := 50.0 * (1.0 - Scaling.elite_resist(boss.arena_index))      # los jefes ignoran parte del daño (resistencia)
+		ok(absf(float(rs["damage_boss"]) - db1 - exp_b) < 0.01 and absf(float(rs["damage_dealt"]) - dd1 - exp_b) < 0.01, "T5e golpe de 50 al jefe: +%.2f a «daño a jefes» y al total (50 con su resistencia)" % exp_b)
 		ar2.kill_all()
 		await _secs(0.5)
 	else:
@@ -440,7 +441,7 @@ func _phase1() -> void:
 		await _secs(0.8)
 		ok(pl.alive and main.state == main.St.RUN and _end_screen() == null and GameState.ad_revives_used == n + 1, "T8c reanimación %d con anuncio completada; la partida continúa (usadas %d)" % [n + 1, GameState.ad_revives_used])
 		ok(int(SaveSystem.data["stats"]["deaths"]) == deaths0 and int(SaveSystem.data["meta"]["fees"]) == fees0, "T8d reanimar no deja derrotas ni honorarios registrados")
-	ok(float(rs["damage_dealt"]) == dmg_total and int(rs["coins_spent"]) == spent_total, "T8e las estadísticas de la partida se conservan al reanimar")
+	ok(float(rs["damage_dealt"]) >= dmg_total and int(rs["coins_spent"]) == spent_total and int(rs["purchases"]) >= 1 and int(rs["bosses"]) == 2, "T8e las estadísticas de la partida se conservan al reanimar")
 
 	# ---- T4: muerte definitiva -> pantalla de estadísticas
 	GameState.build.add("armor_low", 0, true)

@@ -33,6 +33,7 @@ const CATEGORY_NAMES := {
 	"ctrl": "Habilidades y Control",
 	"syn": "Sinergias entre Mejoras",
 	"legend": "Especiales y Legendarias",
+	"gold": "Honorarios y Facturación",
 }
 
 const CATEGORY_COLORS := {
@@ -41,7 +42,7 @@ const CATEGORY_COLORS := {
 	"aoe": Color(0.8, 0.5, 1.0), "elem": Color(1.0, 0.5, 0.2), "combo": Color(0.3, 0.9, 1.0),
 	"eco": Color(1.0, 0.85, 0.25), "streak": Color(1.0, 0.45, 0.7), "risk": Color(0.85, 0.15, 0.2),
 	"case": Color(1.0, 0.6, 0.35), "docs": Color(0.95, 0.95, 0.7), "ctrl": Color(0.55, 0.65, 1.0),
-	"syn": Color(0.4, 1.0, 0.8), "legend": Color(1.0, 0.75, 0.2),
+	"syn": Color(0.4, 1.0, 0.8), "legend": Color(1.0, 0.75, 0.2), "gold": Color(1.0, 0.82, 0.3),
 }
 
 ## Límites duros de ciertas estadísticas para evitar builds rotas (por encima = inútil).
