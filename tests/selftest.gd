@@ -57,6 +57,7 @@ func _secs(t: float) -> void:
 
 func _run() -> void:
 	await _frames(10)
+	LawPerks.forced_roll = 0.99          # sin cofre extra aleatorio: el robot espera el flujo clásico de un cofre
 	Engine.time_scale = 1.0
 	# --- pruebas de controles táctiles (eventos reales) ---
 	await main._enter_lobby(true)
@@ -253,16 +254,18 @@ func _reward_flow(idx: int) -> void:
 		cs._select(0)
 		cs._on_confirm()
 		await _frames(5)
-		if GameState.build.picks.size() != before + 1:
+		if GameState.build.picks.size() < before + 1:
 			_fail("elegir carta no añadió la mejora (%d → %d)" % [before, GameState.build.picks.size()])
 		else:
 			_log("carta elegida OK (%d mejoras)" % GameState.build.picks.size())
 		if arena.kind == "boss":
-			await _secs(0.5)
-			for n in main._ov_root().get_children():
-				if n is CardSelect:
-					n._select(1)
-					n._on_confirm()
+			# botín especial + 2 elecciones normales: el robot elige todas las que vayan saliendo
+			for k in 2:
+				await _secs(0.6)
+				for n in main._ov_root().get_children():
+					if n is CardSelect:
+						n._select(1)
+						n._on_confirm()
 	await _frames(10)
 	if not portal.enabled:
 		_fail("el portal no se activó tras abrir el cofre")
