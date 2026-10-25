@@ -147,6 +147,13 @@ func _ready() -> void:
 			fxn.name = "FxShot"
 			add_child(fxn)
 			fxn.set("main", self)
+	if Config.cmd_flag("--chesttest"):
+		var cht := load("res://tests/chesttest.gd")
+		if cht != null:
+			var chn: Node = cht.new()
+			chn.name = "ChestTest"
+			add_child(chn)
+			chn.set("main", self)
 	if Config.cmd_flag("--bosstest"):
 		var bst_t := load("res://tests/bosstest.gd")
 		if bst_t != null:

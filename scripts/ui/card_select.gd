@@ -14,7 +14,10 @@ var _selected := -1
 var _card_nodes: Array = []
 var _confirm: Button
 var _skip: Button
-var _row: HBoxContainer
+var _row: HFlowContainer
+var _sc: ScrollContainer
+var _scroll: TouchScroll
+var _press_i := -1             # carta sobre la que empezó la pulsación (se elige al soltar, si no fue un desplazamiento)
 var _title: Label
 var _depth := 0
 var source := "chest"
@@ -30,24 +33,48 @@ func _ready() -> void:
 	add_child(UIKit.dim_background(0.78))
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.alignment = BoxContainer.ALIGNMENT_CENTER
-	root.add_theme_constant_override("separation", 14)
+	root.offset_left = 16.0
+	root.offset_right = -16.0
+	root.offset_top = 8.0
+	root.offset_bottom = -10.0
+	root.add_theme_constant_override("separation", 8)
 	add_child(root)
-	_title = UIKit.title("ELIGE UNA MEJORA", 50)
+	_title = UIKit.title("ELIGE UNA MEJORA", 40)
 	root.add_child(_title)
-	_inv_info = UIKit.label("", 22, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_inv_info = UIKit.label("", 18, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	_inv_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_inv_info.custom_minimum_size = Vector2(1000, 0)
-	_inv_info.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_inv_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(_inv_info)
-	_row = HBoxContainer.new()
-	_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_row.add_theme_constant_override("separation", 22)
-	root.add_child(_row)
+	# Cabecera y botones FIJOS; las cartas van en una zona desplazable (arrastrando sobre cualquier parte, también sobre las cartas)
+	_sc = ScrollContainer.new()
+	_sc.name = "CardScroll"
+	_sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_sc)
+	var holder := VBoxContainer.new()
+	holder.alignment = BoxContainer.ALIGNMENT_CENTER
+	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_sc.add_child(holder)
+	_row = HFlowContainer.new()
+	_row.alignment = FlowContainer.ALIGNMENT_CENTER
+	_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_row.add_theme_constant_override("h_separation", 22)
+	_row.add_theme_constant_override("v_separation", 22)
+	var pad := MarginContainer.new()          # holgura para que la carta elegida (escala 1,06) no se recorte en los bordes
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 10)
+	holder.add_child(pad)
+	pad.add_child(_row)
+	_scroll = TouchScroll.new()
+	add_child(_scroll)
 	var btns := HBoxContainer.new()
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	btns.add_theme_constant_override("separation", 18)
 	root.add_child(btns)
+	_scroll.setup(_sc, _sc)
 	_confirm = UIKit.accent_button("ELEGIR", Vector2(300, 66), 30)
 	_confirm.pressed.connect(_on_confirm)
 	btns.add_child(_confirm)
@@ -108,12 +135,12 @@ func _rebuild() -> void:
 		var ccol: Color = UpgradeDB.CATEGORY_COLORS.get(d["cat"], Color.WHITE)
 		var pc := PanelContainer.new()
 		var cw := 330.0 if _cards.size() <= 3 else 250.0
-		pc.custom_minimum_size = Vector2(cw, 470)
+		pc.custom_minimum_size = Vector2(cw, 440)
 		pc.add_theme_stylebox_override("panel", UIKit.style(UIKit.PANEL, rcol, 18, 5, 16))
-		pc.pivot_offset = Vector2(cw * 0.5, 235)
+		pc.pivot_offset = Vector2(cw * 0.5, 220)
 		pc.mouse_filter = Control.MOUSE_FILTER_STOP
 		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 8)
+		v.add_theme_constant_override("separation", 5)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		pc.add_child(v)
 		if card.has("group"):
@@ -124,7 +151,7 @@ func _rebuild() -> void:
 				v.add_child(UIKit.label("ESPECIAL · +1 NIVEL DE REGALO", 16, Color(1.0, 0.85, 0.3), HORIZONTAL_ALIGNMENT_CENTER))
 		var rl := UIKit.label(String(UpgradeDB.RARITY_NAMES[rar]).to_upper(), 20, rcol, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(rl)
-		var ic := IconView.new().setup(String(d["icon"]), ccol, 110.0)
+		var ic := IconView.new().setup(String(d["icon"]), ccol, 88.0)
 		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		v.add_child(ic)
 		var nm := UIKit.label(String(d["name"]), 28, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER)
@@ -156,7 +183,11 @@ func _rebuild() -> void:
 		pc.gui_input.connect(_on_card_input.bind(i))
 		pc.set_meta("pad_card", true)           # enfocable con mando: el foco selecciona la carta, confirmar la elige
 		pc.focus_mode = Control.FOCUS_ALL if PadInput.pad_mode else Control.FOCUS_NONE
-		pc.focus_entered.connect(func(): if PadInput.pad_mode and _selected != i: _select(i))
+		pc.focus_entered.connect(func():
+			if PadInput.pad_mode:
+				_sc.ensure_control_visible(pc)
+				if _selected != i:
+					_select(i))
 		_row.add_child(pc)
 		_card_nodes.append(pc)
 		# animación de entrada
@@ -175,10 +206,22 @@ func _on_card_input(event: InputEvent, i: int) -> void:
 			_select(i)
 		accept_event()
 		return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_select(i)
-	elif event is InputEventScreenTouch and event.pressed:
-		_select(i)
+	# Elegir al SOLTAR sin haber arrastrado: deslizar para ver más cartas nunca selecciona una. El «soltar» de un
+	# desplazamiento lo consume TouchScroll, así que aquí solo llega una pulsación corta.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
+		if event.pressed:
+			_press_i = i
+		elif _press_i == i:
+			_press_i = -1
+			if _selected != i:
+				_select(i)
+	elif event is InputEventScreenTouch:
+		if event.pressed:
+			_press_i = i
+		elif _press_i == i:
+			_press_i = -1
+			if _selected != i:
+				_select(i)
 
 
 func _select(i: int) -> void:
