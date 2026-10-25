@@ -168,6 +168,11 @@ static func on_damage(enemy: Node3D, dmg: float, info: Dictionary, hp_before: fl
 				stats["merged"] += 1
 			"dropped":
 				stats["dropped"] += 1
+	# --- impacto visual por familia + aviso de muerte ---
+	if fx != null and not info.get("no_fx", false):
+		if killed:
+			fx.kill_banner(enemy.global_position, enemy.get_instance_id(), is_boss, vscale)
+		fx.impact(enemy.global_position, String(st["kind"]), src, element, bool(st["massive"]), is_boss, vscale)
 	# --- sonido ---
 	var snd := _play_sound(enemy, st, src, element, killed, is_boss, vscale, info)
 	# --- combos de sinergia ---

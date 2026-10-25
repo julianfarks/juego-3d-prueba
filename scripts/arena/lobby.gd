@@ -165,6 +165,30 @@ func _build_decor() -> void:
 			n.position = Vector3(sx * (HALF - 2.5), 0, sz * (HALF - 2.5))
 			add_child(n)
 	_label("VESTÍBULO DEL BUFETE", Vector3(0, 6.5, 2.0), 64, Color(1.0, 0.85, 0.35), 0.012)
+	_build_easter_egg()
+
+
+## Easter egg: una placa diminuta en el muro este, justo detrás de la columna del rincón sureste (solo se lee de cerca).
+func _build_easter_egg() -> void:
+	var holder := Node3D.new()
+	holder.name = "EasterEggPlaca"
+	holder.position = Vector3(HALF - 0.12, 0.0, HALF - 2.5)
+	holder.rotation_degrees = Vector3(0, -90, 0)            # mira hacia el interior (-X)
+	add_child(holder)
+	var b := MeshBuilder.new()
+	b.box(Vector3(2.5, 0.5, 0.05), MeshBuilder.xf(Vector3(0, 0.9, 0)), Color(0.16, 0.13, 0.1))
+	b.box(Vector3(2.4, 0.4, 0.06), MeshBuilder.xf(Vector3(0, 0.9, 0.01)), Color(0.78, 0.6, 0.22))
+	Mats.mesh_instance(b.build(), Mats.world_material(), holder)
+	var l := Label3D.new()
+	l.text = "JulianFarKs estuvo aquí"
+	l.font_size = 40
+	l.pixel_size = 0.0036
+	l.outline_size = 4
+	l.modulate = Color(0.12, 0.08, 0.04)
+	l.outline_modulate = Color(0.95, 0.8, 0.4, 0.6)
+	l.position = Vector3(0, 0.9, 0.05)
+	l.double_sided = false
+	holder.add_child(l)
 
 
 # ------------------------------------------------------------------ portales (norte)
