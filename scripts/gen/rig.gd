@@ -5,6 +5,14 @@ extends Node3D
 ## muerte...) y se mezclan con suavizado: hacen el papel de rig + AnimationPlayer sin
 ## depender de importar archivos externos. Los personajes comparten esta misma rig.
 
+# Pose de «seal» (rad / m). Muslo y espinilla: pies planos y a la misma altura (comprobado en tests/rigtest.gd).
+const SEAL_LEAN := 0.65
+const SEAL_HEAD := 0.5
+const SEAL_ARM := 1.8
+const SEAL_FORE := 0.2
+const SEAL_THIGH := 0.4
+const SEAL_SHIN := 0.45
+const SEAL_DROP := 0.03
 const JOINTS := ["hips", "torso", "head", "arm_l", "fore_l", "arm_r", "fore_r", "leg_l", "shin_l", "leg_r", "shin_r"]
 
 var j: Dictionary = {}              # nombre -> Node3D
@@ -226,16 +234,26 @@ func _compute() -> void:
 			_s("leg_l", 0.3)
 			_s("leg_r", -0.3)
 		"seal":
-			var k5 := minf(p * 2.0, 1.0)
-			_hips_y_off = -0.22 * k5 * (1.0 - maxf(0.0, (p - 0.7) / 0.3))
-			_s("torso", -0.6 * k5)
-			_s("head", 0.5 * k5)
-			_s("arm_l", 0.9 + 0.6 * ease(maxf(0.0, p - 0.5) * 2.0, 0.4), 0.0, -0.3)
-			_s("arm_r", 0.9 + 0.6 * ease(maxf(0.0, p - 0.5) * 2.0, 0.4), 0.0, 0.3)
-			_s("leg_l", 0.9 * k5)
-			_s("shin_l", -1.2 * k5)
-			_s("leg_r", -0.5 * k5)
-			_s("shin_r", -0.2 * k5)
+			# Sellar / estampar (Sello Mágico y el despacho del tráiler). Reverencia con AMBAS rodillas flexionadas y los pies
+			# apoyados (antes un pie se hundía 21 cm bajo el suelo y el otro quedaba 48 cm en el aire): el torso se inclina,
+			# la mano izquierda baja a estampar y la derecha deja colgar el maletín plomado junto a la pierna (no lo adelanta).
+			var kin := ease(clampf(p / 0.4, 0.0, 1.0), 0.6)
+			var kout := ease(clampf((p - 0.6) / 0.3, 0.0, 1.0), 0.6)
+			var k5 := kin * (1.0 - kout)
+			# el brazo se adelanta ANTES que la inclinación (y se retira antes): la mano pasa por encima del tablero, no por dentro
+			var ka := ease(clampf(p / 0.2, 0.0, 1.0), 0.6) * (1.0 - ease(clampf((p - 0.72) / 0.24, 0.0, 1.0), 0.6))
+			var press := sin(clampf((p - 0.4) / 0.18, 0.0, 1.0) * PI)       # alza el sello (0.40-0.49) y lo baja de golpe (0.49-0.58)
+			_hips_y_off = -SEAL_DROP * k5
+			_s("torso", -SEAL_LEAN * k5)
+			_s("head", SEAL_HEAD * k5)
+			_s("arm_l", SEAL_ARM * ka + 0.3 * press, 0.0, -0.08 * k5)
+			_s("fore_l", SEAL_FORE * ka)
+			_s("arm_r", SEAL_LEAN * k5, 0.0, 0.1 * k5)                    # contrarresta la inclinación: el brazo cuelga vertical
+			_s("fore_r", 0.05)
+			_s("leg_l", SEAL_THIGH * k5)
+			_s("shin_l", -SEAL_SHIN * k5)
+			_s("leg_r", SEAL_THIGH * k5)
+			_s("shin_r", -SEAL_SHIN * k5)
 		"barrier":
 			var k6 := minf(p * 3.0, 1.0)
 			_s("arm_l", 0.4, 0.0, -1.35 * k6)

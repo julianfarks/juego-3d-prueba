@@ -68,6 +68,19 @@ static func label3d(text: String, size := 48, col := Color(0.1, 0.08, 0.06), out
 	return l
 
 
+## Label3D que SIEMPRE cabe en 'max_w' metros: reduce el tamaño de letra si hace falta (medido con la fuente real).
+static func fit_label3d(text: String, size: int, max_w: float, col: Color, outline := 0) -> Label3D:
+	var l := label3d(text, size, col, outline)
+	var f: Font = l.font
+	if f != null:
+		var w := 0.0
+		for line in l.text.split("\n"):
+			w = maxf(w, f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, l.font_size).x * l.pixel_size)
+		if w > max_w:
+			l.font_size = maxi(8, int(floor(float(size) * max_w / w)))
+	return l
+
+
 # ============================================================================ DESPACHO
 static func office() -> Dictionary:
 	var root := Node3D.new()
@@ -125,8 +138,6 @@ static func office() -> Dictionary:
 	b.cylinder(0.08, 0.12, 0.05, 8, _x(Vector3(0.05, 1.03, -1.85)), WOOD_D)                          # lámpara
 	b.cylinder(0.02, 0.02, 0.5, 6, _x(Vector3(0.05, 1.3, -1.85)), GOLD)
 	b.frustum(Vector2(0.45, 0.3), Vector2(0.25, 0.18), 0.2, _x(Vector3(0.05, 1.58, -1.85)), _g(Color(0.15, 0.45, 0.25), 0.2))
-	b.box(Vector3(0.3, 0.12, 0.2), _x(Vector3(-0.55, 1.06, -1.95)), Color(0.15, 0.15, 0.17))         # sello
-	b.cylinder(0.05, 0.05, 0.16, 6, _x(Vector3(-0.55, 1.2, -1.95)), WOOD_D)
 	# planta
 	b.cylinder(0.22, 0.17, 0.45, 8, _x(Vector3(4.8, 0.22, -3.2)), Color(0.75, 0.42, 0.25))
 	for i in 7:
@@ -146,6 +157,17 @@ static func office() -> Dictionary:
 	for i in 6:
 		db.box(Vector3(0.34, 0.004, 0.02), _x(Vector3(0, 0.008, -0.22 + i * 0.07)), Color(0.4, 0.4, 0.45))
 	_mesh(db, doc)
+	# el sello es un objeto propio (no parte del decorado): reposa SOBRE el documento y el abogado lo agarra, lo alza y estampa
+	var stamp := Node3D.new()
+	stamp.name = "Stamp"
+	var stb := MeshBuilder.new()
+	stb.box(Vector3(0.3, 0.1, 0.2), _x(Vector3(0, 0.05, 0)), Color(0.15, 0.15, 0.17))                 # base
+	stb.box(Vector3(0.3, 0.015, 0.2), _x(Vector3(0, 0.0075, 0)), Color(0.75, 0.1, 0.12))               # almohadilla roja
+	stb.cylinder(0.05, 0.05, 0.17, 8, _x(Vector3(0, 0.185, 0)), WOOD_D)                               # mango
+	stb.sphere(0.07, 8, 6, _x(Vector3(0, 0.29, 0)), WOOD)                                              # pomo
+	_mesh(stb, stamp)
+	root.add_child(stamp)
+	stamp.position = doc.position + Vector3(0.0, 0.006, 0.0)
 	var seal := label3d("LISTO", 64, Color(0.85, 0.08, 0.1))
 	seal.name = "Seal"
 	seal.rotation_degrees = Vector3(-90, 0, 12)
@@ -171,7 +193,7 @@ static func office() -> Dictionary:
 	fill.light_energy = 1.0
 	fill.omni_range = 10.0
 	root.add_child(fill)
-	return {"root": root, "doc": doc, "seal": seal, "lights": [sun, lamp, fill]}
+	return {"root": root, "doc": doc, "seal": seal, "stamp": stamp, "lights": [sun, lamp, fill]}
 
 
 # ============================================================================ TRIBUNAL
@@ -228,22 +250,29 @@ static func court() -> Dictionary:
 	for sx in [-0.35, 0.35]:
 		b.box(Vector3(0.08, 1.5, 0.08), _x(Vector3(sx, 0.75, -0.85), Vector3(10, 0, sx * 20)), WOOD_D)
 	_mesh(b, root)
+	# TARJETA DE PRUEBA (cartel grande y legible): papel con marco rojo; «PRUEBA A» en rojo oscuro con contorno blanco ocupa
+	# todo el ancho de la cabecera; el texto secundario va debajo de una línea divisoria, en gris oscuro y sin tocar el título.
 	var evid := Node3D.new()
 	evid.name = "Evidence"
-	evid.position = Vector3(0, 1.45, -0.86)
+	evid.position = Vector3(0, 1.2, -0.86)
 	evid.rotation_degrees = Vector3(-10, 0, 0)
 	root.add_child(evid)
 	var eb := MeshBuilder.new()
-	eb.box(Vector3(0.75, 0.95, 0.03), _x(), PAPER)
-	eb.box(Vector3(0.6, 0.02, 0.01), _x(Vector3(0, -0.12, 0.02)), Color(0.4, 0.4, 0.45))
-	eb.box(Vector3(0.6, 0.02, 0.01), _x(Vector3(0, -0.2, 0.02)), Color(0.4, 0.4, 0.45))
-	eb.box(Vector3(0.45, 0.02, 0.01), _x(Vector3(0, -0.28, 0.02)), Color(0.4, 0.4, 0.45))
+	var ER := Color(0.72, 0.04, 0.08)
+	eb.box(Vector3(1.3, 1.2, 0.04), _x(), PAPER)
+	eb.box(Vector3(1.3, 0.06, 0.05), _x(Vector3(0, 0.57, 0.005)), ER)
+	eb.box(Vector3(1.3, 0.06, 0.05), _x(Vector3(0, -0.57, 0.005)), ER)
+	eb.box(Vector3(0.06, 1.2, 0.05), _x(Vector3(-0.62, 0, 0.005)), ER)
+	eb.box(Vector3(0.06, 1.2, 0.05), _x(Vector3(0.62, 0, 0.005)), ER)
+	eb.box(Vector3(1.0, 0.03, 0.01), _x(Vector3(0, 0.1, 0.025)), ER)                                    # divisoria
+	for i in 3:
+		eb.box(Vector3(0.85 - i * 0.15, 0.025, 0.01), _x(Vector3(0, -0.4 - i * 0.07, 0.025)), Color(0.45, 0.45, 0.5))
 	_mesh(eb, evid)
-	var el := label3d("PRUEBA A", 64, RED)
-	el.position = Vector3(0, 0.22, 0.03)
+	var el := fit_label3d("PRUEBA A", 140, 1.04, ER, 10)
+	el.position = Vector3(0, 0.33, 0.03)
 	evid.add_child(el)
-	var el2 := label3d("Huellas del ladrón\nen la escena", 26, Color(0.2, 0.2, 0.25))
-	el2.position = Vector3(0, 0.0, 0.03)
+	var el2 := fit_label3d("Huellas del ladrón\nen la escena", 56, 0.98, Color(0.1, 0.1, 0.16))
+	el2.position = Vector3(0, -0.14, 0.03)
 	evid.add_child(el2)
 	var plate := label3d("JUEZ", 46, GOLD)
 	plate.position = Vector3(0, 1.95, -3.28)

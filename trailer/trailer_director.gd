@@ -52,9 +52,9 @@ const CAPTIONS := [
 ]
 const BIGS := [
 	["UN CASO PERDIDO.", 10.62, 12.0, "low"],
-	["UNA JUSTICIA\nMUY PERSONAL.", 13.62, 15.38, "center"],
-	["CONSTRUYE UNA\nBUILD IMPARABLE.", 24.15, 26.95, "top"],
-	["NINGÚN LADRÓN\nESTÁ A SALVO.", 34.0, 36.42, "low"],
+	["UNA JUSTICIA\nMUY PERSONAL.", 13.62, 15.38, "low"],
+	["CONSTRUYE UNA\nBUILD IMPARABLE.", 24.15, 26.95, "banner"],
+	["NINGÚN LADRÓN\nESTÁ A SALVO.", 34.0, 36.42, "top"],
 ]
 const STAMPS := [
 	["¡NO CULPABLES!", 7.52, 8.5],
@@ -222,6 +222,19 @@ func _build_overlay() -> void:
 	_caption.add_theme_constant_override("outline_size", 8)
 	_caption.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_caption.add_theme_font_size_override("font_size", 30 if not vertical else 36)
+	_caption.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8))
+	# placa oscura translúcida con filo dorado: legible sobre paredes blancas y sin mezclarse con el decorado
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(0.05, 0.04, 0.09, 0.82)
+	csb.border_color = Color(1.0, 0.78, 0.25)
+	csb.border_width_left = 8
+	csb.set_corner_radius_all(10)
+	csb.content_margin_left = 24
+	csb.content_margin_right = 20
+	csb.content_margin_top = 10
+	csb.content_margin_bottom = 12
+	_caption.add_theme_stylebox_override("normal", csb)
 	_ov.add_child(_caption)
 	_big = Label.new()
 	_big.add_theme_font_override("font", black)
@@ -238,7 +251,7 @@ func _build_overlay() -> void:
 	_ov.add_child(_big)
 	_stamp_box = PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.0)
+	sb.bg_color = Color(0.99, 0.96, 0.9, 0.93)            # fondo de papel: el rojo se lee sobre cualquier escena
 	sb.border_color = Color(0.86, 0.1, 0.12)
 	sb.set_border_width_all(12)
 	sb.set_corner_radius_all(14)
@@ -318,25 +331,30 @@ func _update_overlay() -> void:
 			_caption.text = TrailerSets.tr_(c[0])
 			_caption.visible_ratio = clampf((G - c[1]) / 0.9, 0.0, 1.0)
 			_caption.modulate.a = clampf((c[2] - G) / 0.25, 0.0, 1.0)
-			var w := vs.x * (0.6 if not vertical else 0.86)
+			var w := vs.x * (0.36 if not vertical else 0.86)      # estrecho: se queda a la izquierda del emblema de la justicia
 			_caption.size = Vector2(w, 0)
-			_caption.position = Vector2(vs.x * 0.05, maxf(bh, 0.0) + vs.y * (0.04 if not vertical else 0.12))
+			_caption.position = Vector2(vs.x * 0.04, maxf(bh, 0.0) + vs.y * (0.035 if not vertical else 0.12))
 	# textos grandes
 	_big.visible = false
 	for bt in BIGS:
 		if G >= bt[1] and G < bt[2]:
 			_big.visible = true
 			_big.text = TrailerSets.tr_(bt[0])
+			var banner: bool = bt[3] == "banner" and not vertical
+			if banner:
+				_big.text = _big.text.replace("\n", " ")           # una sola línea en su propia franja superior
+			_big.add_theme_font_size_override("font_size", (68 if banner else 92) if not vertical else 96)
 			var tin := clampf((G - bt[1]) / 0.16, 0.0, 1.0)
 			var tout := clampf((bt[2] - G) / 0.22, 0.0, 1.0)
 			_big.modulate.a = minf(tin, tout)
 			var s: float = lerpf(1.45, 1.0, _ease(tin)) * (1.0 + (G - float(bt[1])) * 0.025) * lerpf(1.08, 1.0, tout)
-			_big.size = Vector2(vs.x * 0.94, vs.y * 0.3)
+			_big.size = Vector2(vs.x * 0.94, vs.y * (0.3 if not banner else 0.14))
 			_big.pivot_offset = _big.size * 0.5
 			_big.scale = Vector2(s, s)
 			var y := 0.5
 			match bt[3]:
 				"top": y = 0.17 if not vertical else 0.2
+				"banner": y = 0.085 if not vertical else 0.2
 				"low": y = 0.72 if not vertical else 0.7
 			_big.position = Vector2(vs.x * 0.03, vs.y * y - _big.size.y * 0.5)
 	# sello rojo
@@ -352,7 +370,7 @@ func _update_overlay() -> void:
 			_stamp_box.scale = Vector2(s2, s2)
 			_stamp_box.rotation = deg_to_rad(-9.0)
 			_stamp_box.modulate.a = minf(k * 2.0, clampf((st[2] - G) / 0.15, 0.0, 1.0))
-			_stamp_box.position = Vector2(vs.x * 0.5, vs.y * (0.62 if not vertical else 0.66)) - _stamp_box.size * 0.5
+			_stamp_box.position = Vector2(vs.x * 0.5, vs.y * (0.74 if not vertical else 0.74)) - _stamp_box.size * 0.5      # abajo: no tapa la cara/torso del personaje
 	# destello / fundido
 	_flash.color.a = clampf(flash, 0.0, 1.0)
 	_fade.color.a = clampf(fade, 0.0, 1.0)
@@ -457,6 +475,20 @@ func _build_story_sets() -> void:
 
 
 # ============================================================================ HISTORIA
+## El sello es un objeto real: reposa sobre el documento, la mano izquierda lo agarra al llegar (acción «seal» p≥0.38), lo alza
+## y lo baja de golpe (p≈0.58) y lo suelta sobre el documento. Nunca queda por debajo de la superficie del papel.
+func _hold_stamp() -> void:
+	var stamp: Node3D = office["stamp"]
+	var doc: Node3D = office["doc"]
+	var rest: Vector3 = doc.global_position + Vector3(0, 0.006, 0)
+	var p := lawyer.action_progress() if lawyer.action == "seal" else -1.0
+	if p >= 0.38 and p < 0.6:
+		var hand: Vector3 = (lawyer.j["fore_l"] as Node3D).global_transform * Vector3(0, -0.3, 0)
+		stamp.global_position = Vector3(hand.x, maxf(hand.y - 0.2, rest.y), hand.z)
+	else:
+		stamp.global_position = rest
+
+
 func _o(p: Vector3) -> Vector3:
 	return OFFICE_POS + p
 
@@ -468,7 +500,7 @@ func _c(p: Vector3) -> Vector3:
 func _story() -> void:
 	bars = 1.0
 	# ---------- 1. despacho ----------
-	lawyer.position = _o(Vector3(-0.9, 0, -0.55))
+	lawyer.position = _o(Vector3(-0.5, 0, -0.40))      # la mano izquierda llega justo al documento (medido con el rig: x -0,40, z -0,93)
 	lawyer.rotation.y = PI
 	lawyer.speed_norm = 0.0
 	(office["seal"] as Label3D).visible = false
@@ -486,9 +518,10 @@ func _story() -> void:
 			pass
 		if t >= 1.0 and t < 1.35:
 			lawyer.rotation.y = lerp_angle(PI, 0.0, (t - 1.0) / 0.35)
-		if _once(s1, "stamp", t, 1.45):
-			lawyer.play("seal", 0.55)
-		if _once(s1, "stampsnd", t, 1.75):
+		if _once(s1, "stamp", t, 1.35):
+			lawyer.play("seal", 0.95)
+		_hold_stamp()
+		if _once(s1, "stampsnd", t, 1.9):
 			(office["seal"] as Label3D).visible = true
 			AudioManager.sfx("seal", 0.0, 0.0)
 			_snd("stapler", -8.0)
@@ -596,6 +629,7 @@ func _story() -> void:
 		if t >= 0.55:
 			evid.global_position = t1.global_position + Vector3(0, 1.5, 0) + t1.global_transform.basis.z * -0.15
 			evid.rotation = Vector3(0, t1.rotation.y + PI, 0.3)
+			evid.scale = Vector3.ONE * 0.5                               # la tarjeta grande se lleva a escala de mano
 		# bola de papel que le da al abogado en la cabeza
 		if t >= 0.9 and t < 1.45:
 			ball.visible = true
@@ -1049,6 +1083,11 @@ func _action() -> void:
 			arena._open_chest(3)
 		var cs := _overlay_of(CardSelect) as CardSelect
 		if cs != null:
+			if _once(a5, "layout", t, 0.0):
+				# deja libre la franja superior para el titular: la interfaz de cartas baja, no se tapa ni se recorta
+				for ch in cs.get_children():
+					if ch is VBoxContainer:
+						(ch as VBoxContainer).offset_top = float(get_viewport().get_visible_rect().size.y) * (0.15 if not vertical else 0.28)
 			if _once(a5, "sel", t, 1.55):
 				cs._select(1)
 			if _once(a5, "ok", t, 2.4):
