@@ -36,6 +36,12 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 ## Modo desarrollador
 Ajustes → **CÓDIGOS** → escribir el código de desarrollador → aparece el menú **DESARROLLADOR** en Ajustes (se recuerda entre sesiones; se puede ocultar). Permite sumar dinero y honorarios (botones o cantidad libre), agregar cualquier mejora con rareza y cantidad (respetando sus máximos), modo Dios, saltar de arena y depuración. El código se guarda solo como hash SHA-256.
 
+## Novedades 0.13.0 — efectos de combate, ciudad con más personalidad y rendimiento
+
+- **Impactos por familia**: papeles al golpear con el maletín, destello y anillo dorado en críticos, onda de choque en golpes masivos, brasas/esquirlas/arco eléctrico por elemento, estela al atravesar y anillo al rebotar, ataques de jefe más contundentes y avisos «¡CASO RESUELTO!» al derrotar. Con presupuesto por nivel de efectos (Reducidos/Normales/Completos).
+- **Ciudad (bioma urbano)**: acera con bordillo, letreros judiciales en postes con guirnaldas de luces y papeles movidos por el viento, todo sin colisiones.
+- **Rendimiento**: el margen de colisión de los enemigos pasa a 0,03 m; el tiempo de física medido con 50 enemigos baja ~3x en el entorno de pruebas (sin GPU; los FPS reales en Android quedan por medir). Medición: `--perftest`.
+
 ## Novedades 0.12.0 — ataques que acompañan al maletín, jefes con ataques propios, botín especial y reanimación
 - **Ataques secundarios del maletín** (`scripts/combat/case_mods.gd`, módulo `CaseMods` enganchado en `CaseThrow`): Cuchillas del Litigio, Misiles del Bufete, Rayos de la Fiscalía, Órbita de Navajas, Lluvia de Expedientes, Doble Maletín Fantasma, Discos Judiciales, Láser de Sentencia, Explosión de Apertura, Rayo de Regreso, Lluvia de Cuchillas, Onda de Choque, Granada de Papeles y Persecución Judicial. Se suman a los ya existentes (Cohetes de Objeción, Cadena Eléctrica, Detonación de Impacto, Rebote Procesal). Cada uno tiene comportamiento y aspecto propios.
 - **10 mejoras de proyectiles**: Más Cuchillas, Más Misiles, Tormenta de Rayos, Alcance Secundario, Proyectiles Perforantes, Proyectil Extra, Doble Activación (salva al salir y al regresar), Fisión de Proyectiles, Guiado Secundario y Detonaciones Múltiples; más Cadencia, Retorno Express y Cargador de Maletines.
