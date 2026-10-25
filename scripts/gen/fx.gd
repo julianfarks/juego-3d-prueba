@@ -632,6 +632,135 @@ func _particles() -> CPUParticles3D:
 	particle_next = (particle_next + 1) % particle_pool.size()
 	return q
 
+# --- impactos por familia (Task L) -------------------------------------------------------------------
+## Cada familia tiene su propia silueta: papel (maletín/documentos), chispa dorada (crítico), onda de choque (masivo),
+## brasas (fuego), esquirlas (hielo), arco eléctrico (descarga). Presupuesto por ventana de tiempo: los golpes normales
+## son lo primero que se omite cuando hay muchos; los críticos, masivos y muertes de jefe siempre se ven.
+const KILL_MSGS := ["¡CASO RESUELTO!", "¡OBJECIÓN CONCEDIDA!", "¡CASO CERRADO!", "¡SENTENCIA!"]
+var _imp_window := 0.0
+var _imp_count := 0
+var _kill_msg_t := -10.0
+var _paper_pool: Array[CPUParticles3D] = []
+var _paper_next := 0
+static var _paper_mesh: BoxMesh
+var impact_stats := {"shown": 0, "skipped": 0, "papers": 0}
+
+
+func _impact_allowed(prio: int) -> bool:
+	if _clock - _imp_window > 0.25:
+		_imp_window = _clock
+		_imp_count = 0
+	var budget := int(round(float(max_fx) / 8.0))        # 3 / 6 / 10 por cuarto de segundo según nivel de efectos
+	if prio >= 3:
+		return true
+	if _imp_count >= budget or (prio <= 1 and _imp_count >= int(budget * 0.6)):
+		impact_stats["skipped"] += 1
+		return false
+	_imp_count += 1
+	return true
+
+
+func paper_burst(pos: Vector3, amount := 6, speed := 4.0) -> void:
+	var n := int(round(amount * particle_scale * _fx_relief()))
+	if n <= 0:
+		return
+	var cap := maxi(3, int(max_fx / 16))
+	var p: CPUParticles3D
+	if _paper_pool.size() < cap:
+		p = CPUParticles3D.new()
+		p.one_shot = true
+		p.explosiveness = 1.0
+		p.emitting = false
+		p.direction = Vector3.UP
+		p.spread = 70.0
+		p.gravity = Vector3(0, -3.2, 0)                  # los papeles caen despacio
+		p.angular_velocity_min = -360.0
+		p.angular_velocity_max = 360.0
+		p.damping_min = 1.5
+		p.damping_max = 3.0
+		if _paper_mesh == null:
+			_paper_mesh = BoxMesh.new()
+			_paper_mesh.size = Vector3(0.45, 0.03, 0.6)
+		p.mesh = _paper_mesh
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color(0.97, 0.95, 0.86)
+		p.material_override = m
+		p.local_coords = false
+		add_child(p)
+		_paper_pool.append(p)
+	else:
+		p = _paper_pool[_paper_next]
+		_paper_next = (_paper_next + 1) % _paper_pool.size()
+	p.global_position = pos
+	p.amount = n
+	p.lifetime = 0.95
+	p.initial_velocity_min = speed * 0.5
+	p.initial_velocity_max = speed
+	p.scale_amount_min = 0.35
+	p.scale_amount_max = 0.6
+	p.restart()
+	p.emitting = true
+	impact_stats["papers"] += 1
+
+
+## kind: normal/elem/crit/exec/... (Feedback.classify) · src: origen del daño · element: phys/fire/ice/shock…
+func impact(pos: Vector3, kind: String, src: String, element: String, massive: bool, is_boss: bool, vscale := 1.0) -> void:
+	if kind == "dot" or kind == "chain" or kind == "aoe" or kind == "info":
+		return
+	var prio := 1
+	if kind == "elem":
+		prio = 2
+	if kind == "crit" or kind == "exec" or massive:
+		prio = 3
+	if is_boss and kind != "normal":
+		prio = 3
+	if not _impact_allowed(prio):
+		return
+	impact_stats["shown"] += 1
+	var c := pos + Vector3(0, 1.0 * vscale, 0)
+	var paper := src == "case" or src == "case_mod" or src == "docs"
+	if element == "fire":
+		burst(c, Color(1.0, 0.55, 0.15), 5, 3.5, 0.14, 0.45)
+		flash_sphere(c, 0.7 * vscale, Color(1.0, 0.6, 0.2, 0.6), 0.14)
+	elif element == "ice":
+		burst(c, Color(0.65, 0.9, 1.0), 6, 7.0, 0.1, 0.4)
+		ring(pos, 1.0 * vscale, Color(0.7, 0.95, 1.0, 0.7), 0.25, 0.2, 0.08)
+	elif element == "shock":
+		var d := Vector3(randf_range(-1, 1), randf_range(0.2, 1.0), randf_range(-1, 1)).normalized() * 1.3
+		beam(c, c + d, Color(0.75, 0.85, 1.0, 0.95), 0.07, 0.12)
+		beam(c, c - d * 0.7 + Vector3(0, 0.3, 0), Color(0.9, 0.95, 1.0, 0.9), 0.05, 0.1)
+		burst(c, Color(0.85, 0.92, 1.0), 4, 6.0, 0.08, 0.3)
+	elif paper:
+		paper_burst(c, 3 if kind == "normal" else 6)
+		burst(c, Color(1.0, 0.95, 0.8), 3, 4.5, 0.1, 0.3)
+	else:
+		burst(c, Color(1.0, 0.9, 0.7), 4, 5.0, 0.1, 0.3)
+	if kind == "crit":
+		burst(c, Color(1.0, 0.78, 0.2), 8, 8.0, 0.13, 0.5)
+		flash_sphere(c, 0.9 * vscale, Color(1.0, 0.9, 0.4, 0.7), 0.16)
+		ring(pos, 1.5 * vscale, Color(1.0, 0.8, 0.25, 0.7), 0.28, 0.3, 0.1)
+	if massive or kind == "exec":
+		ring(pos, 3.2 * vscale, Color(1.0, 0.35, 0.4, 0.75), 0.4, 0.5, 0.1)
+		ring(pos, 2.0 * vscale, Color(1.0, 0.9, 0.7, 0.6), 0.3, 0.3, 0.14)
+		paper_burst(c, 8, 6.0)
+
+
+## Aviso temático de muerte. Máx. uno cada 0,7 s (y solo si quedan etiquetas libres) para no tapar la pantalla.
+func kill_banner(pos: Vector3, enemy_id: int, is_boss: bool, vscale := 1.0) -> void:
+	if reduce_fx and not is_boss:
+		return
+	if not is_boss and _clock - _kill_msg_t < 0.7:
+		return
+	_kill_msg_t = _clock
+	var txt: String = "¡CASO RESUELTO!" if is_boss else String(KILL_MSGS[randi() % KILL_MSGS.size()])
+	spawn_number(pos + Vector3(0, 2.6 * vscale, 0), enemy_id + 7, {"kind": "info", "text": txt, "color": Color(1.0, 0.85, 0.35),
+		"scale": 1.5 if is_boss else 1.0, "dur": 1.0, "rise": 1.0, "prio": 3, "massive": false, "crit": false, "value": 0.0})
+	if is_boss:
+		ring(pos, 6.0, Color(1.0, 0.85, 0.35, 0.8), 0.7, 0.8, 0.1)
+		paper_burst(pos + Vector3(0, 1.5, 0), 14, 7.0)
+
+
 
 func clear_all() -> void:
 	for it in active_items:

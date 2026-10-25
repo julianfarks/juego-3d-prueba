@@ -140,6 +140,13 @@ func _ready() -> void:
 			prn.name = "PerfTest"
 			add_child(prn)
 			prn.set("main", self)
+	if Config.cmd_flag("--fxshot"):
+		var fxs := load("res://tests/fxshot.gd")
+		if fxs != null:
+			var fxn: Node = fxs.new()
+			fxn.name = "FxShot"
+			add_child(fxn)
+			fxn.set("main", self)
 	if Config.cmd_flag("--bosstest"):
 		var bst_t := load("res://tests/bosstest.gd")
 		if bst_t != null:
