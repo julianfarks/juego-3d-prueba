@@ -133,6 +133,13 @@ func _ready() -> void:
 			atn.name = "AttackTest"
 			add_child(atn)
 			atn.set("main", self)
+	if Config.cmd_flag("--perftest"):
+		var prf_t := load("res://tests/perftest.gd")
+		if prf_t != null:
+			var prn: Node = prf_t.new()
+			prn.name = "PerfTest"
+			add_child(prn)
+			prn.set("main", self)
 	if Config.cmd_flag("--bosstest"):
 		var bst_t := load("res://tests/bosstest.gd")
 		if bst_t != null:

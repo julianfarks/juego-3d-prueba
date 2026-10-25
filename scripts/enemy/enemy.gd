@@ -119,6 +119,9 @@ func _ready() -> void:
 	collision_layer = Config.L_ENEMY
 	collision_mask = Config.L_WORLD
 	floor_snap_length = 0.4
+	# Con el margen por defecto (0,001) cada move_and_slide sobre el HeightMapShape del terreno repite pasos de recuperación:
+	# medido ~3x más caro con 50 enemigos. 0,03 m no se nota al jugar y quita casi todo ese coste.
+	safe_margin = 0.03
 	motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
 	_seed = randf() * 10.0
 
