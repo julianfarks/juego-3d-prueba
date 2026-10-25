@@ -511,7 +511,15 @@ func _story() -> void:
 	var s1 := {}
 	await _roll("despacho", 3.5, func(t: float):
 		fade = clampf(1.0 - t / 0.5, 0.0, 1.0)
-		_lerp_cam(_o(Vector3(1.2, 1.9, 4.6)), _o(Vector3(0.2, 1.55, 2.4)), _o(Vector3(-0.6, 1.3, -1.6)), _o(Vector3(-0.85, 1.45, -1.3)), t / 3.5, 46.0)
+		# cámara: plano general → PLANO LATERAL mientras sella (se ven la mano, el sello y el documento; antes el cuerpo del abogado
+		# los tapaba desde atrás) → vuelve al plano frontal cuando se gira hacia la cámara
+		var kc := t / 3.5
+		var cam_a := _o(Vector3(1.2, 1.9, 4.6)).lerp(_o(Vector3(0.2, 1.55, 2.4)), kc)
+		var look_a := _o(Vector3(-0.6, 1.3, -1.6)).lerp(_o(Vector3(-0.85, 1.45, -1.3)), kc)
+		var w1 := smoothstep(1.0, 1.55, t) - smoothstep(2.3, 2.9, t)
+		var cam_p := cam_a.lerp(_o(Vector3(-2.6, 1.75, 0.55)), w1)
+		var look_p := look_a.lerp(_o(Vector3(-0.8, 1.2, -1.0)), w1)
+		_lerp_cam(cam_p, cam_p, look_p, look_p, 0.0, 46.0)
 		if _once(s1, "paper", t, 0.25):
 			_snd("paper", -6.0)
 		if _once(s1, "turn", t, 1.0):
