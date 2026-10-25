@@ -154,6 +154,13 @@ func _ready() -> void:
 			chn.name = "ChestTest"
 			add_child(chn)
 			chn.set("main", self)
+	if Config.cmd_flag("--handtest"):
+		var hdt := load("res://tests/handtest.gd")
+		if hdt != null:
+			var hdn: Node = hdt.new()
+			hdn.name = "HandTest"
+			add_child(hdn)
+			hdn.set("main", self)
 	if Config.cmd_flag("--bosstest"):
 		var bst_t := load("res://tests/bosstest.gd")
 		if bst_t != null:

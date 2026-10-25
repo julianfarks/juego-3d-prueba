@@ -161,10 +161,11 @@ static func build_lawyer() -> Rig:
 	var fore_r: Node3D = rig.j["fore_r"]
 	case_node.position = Vector3(0, -0.34, 0)
 	fore_r.add_child(case_node)
-	var cb := briefcase_mesh()
+	var cb := weapon_mesh("case")
 	var cmi := Mats.mesh_instance(cb, rig.material, case_node)
 	cmi.name = "BriefcaseMesh"
 	rig.props["case"] = case_node
+	rig.props["weapon_id"] = "case"
 	return rig
 
 
@@ -184,6 +185,91 @@ static func briefcase_mesh() -> ArrayMesh:
 	b.box(Vector3(0.025, 0.09, 0.05), _x(Vector3(0.1, -0.055, 0)), STEEL_D)
 	b.box(Vector3(0.2, 0.05, 0.02), _x(Vector3(0, -0.28, -0.075)), Color(0.9, 0.85, 0.7))  # etiqueta
 	return b.build()
+
+
+# --- Herramienta principal en la mano (y como proyectil) --------------------------------------------------------------
+## Cada herramienta equipada tiene su propio objeto 3D. Todos se modelan con el ORIGEN EN EL AGARRE (la mano) y el cuerpo
+## hacia -Y (maletín) o hacia +Y (mazo, pluma), y 'weapon_view' da cómo colocarlos en la mano y en el proyectil lanzado.
+static var _weapon_meshes: Dictionary = {}
+
+const WOOD := Color(0.5, 0.3, 0.14)
+const WOOD_D := Color(0.34, 0.19, 0.08)
+const INK := Color(0.12, 0.24, 0.66)
+
+
+## Colocación por herramienta. hand_*: posición/rotación del objeto en la mano; proj_pos: desplazamiento para centrarlo
+## en el pivote del proyectil (el maletín mide ~0,4 hacia abajo desde el agarre → 0,24).
+static func weapon_view(id: String) -> Dictionary:
+	match id:
+		"gavel":
+			return {"hand_pos": Vector3(0, 0.0, 0), "hand_rot": Vector3(-50, 0, 0), "proj_pos": Vector3(0, -0.28, 0)}
+		"quill":
+			return {"hand_pos": Vector3(0, 0.0, 0), "hand_rot": Vector3(40, 0, 0), "proj_pos": Vector3(0, -0.18, 0)}
+	return {"hand_pos": Vector3.ZERO, "hand_rot": Vector3.ZERO, "proj_pos": Vector3(0, 0.24, 0)}
+
+
+static func weapon_mesh(id: String) -> ArrayMesh:
+	if _weapon_meshes.has(id):
+		return _weapon_meshes[id]
+	var m: ArrayMesh
+	match id:
+		"gavel":
+			m = gavel_mesh()
+		"quill":
+			m = quill_mesh()
+		_:
+			m = briefcase_mesh()
+	_weapon_meshes[id] = m
+	return m
+
+
+## Mazo del juez: mango de madera con empuñadura y pomo dorado, cabeza cilíndrica horizontal con aros dorados.
+static func gavel_mesh() -> ArrayMesh:
+	var b := MeshBuilder.new()
+	b.cylinder(0.034, 0.04, 0.56, 6, _x(Vector3(0, 0.16, 0)), WOOD)                              # mango
+	b.cylinder(0.045, 0.045, 0.2, 6, _x(Vector3(0, 0.0, 0)), LEATHER)                           # empuñadura envuelta
+	b.sphere(0.058, 6, 4, _x(Vector3(0, -0.14, 0)), _g(GOLD, 0.35))                               # pomo
+	var head_y := 0.46
+	b.cylinder(0.115, 0.115, 0.4, 8, _x(Vector3(0, head_y, 0), Vector3(0, 0, 90)), WOOD_D)       # cabeza (eje X)
+	for sx in [-1.0, 1.0]:
+		b.cylinder(0.125, 0.125, 0.045, 8, _x(Vector3(sx * 0.15, head_y, 0), Vector3(0, 0, 90)), _g(GOLD, 0.35))   # aros
+		b.cylinder(0.1, 0.1, 0.02, 8, _x(Vector3(sx * 0.205, head_y, 0), Vector3(0, 0, 90)), WOOD)                    # cara de golpeo
+	return b.build()
+
+
+## Pluma estilográfica grande (estilete): cuerpo azul tinta, anillos y clip dorados, empuñadura negra y plumín punzante.
+## Origen en la empuñadura; la punta del plumín queda hacia -Y.
+static func quill_mesh() -> ArrayMesh:
+	var b := MeshBuilder.new()
+	b.cylinder(0.062, 0.062, 0.5, 8, _x(Vector3(0, 0.3, 0)), INK)                                # cuerpo
+	b.cylinder(0.07, 0.07, 0.045, 8, _x(Vector3(0, 0.07, 0)), _g(GOLD, 0.35))                      # anillo inferior
+	b.cylinder(0.07, 0.07, 0.035, 8, _x(Vector3(0, 0.5, 0)), _g(GOLD, 0.35))                       # anillo superior
+	b.sphere(0.07, 8, 4, _x(Vector3(0, 0.55, 0), Vector3.ZERO, Vector3(1, 0.8, 1)), INK.lightened(0.1))    # tapa
+	b.box(Vector3(0.024, 0.34, 0.04), _x(Vector3(0.072, 0.34, 0)), _g(GOLD, 0.35))                # clip
+	b.cylinder(0.04, 0.062, 0.2, 8, _x(Vector3(0, -0.05, 0)), BLACK)                              # empuñadura cónica
+	b.cylinder(0.034, 0.0, 0.3, 4, _x(Vector3(0, -0.3, 0), Vector3(0, 45, 0)), _g(GOLD, 0.4))      # plumín
+	b.box(Vector3(0.012, 0.1, 0.012), _x(Vector3(0, -0.3, 0.0)), BLACK)                           # hendidura del plumín
+	b.sphere(0.03, 5, 4, _x(Vector3(0, -0.47, 0)), _g(Color(0.3, 0.6, 1.0), 0.9))               # gota de tinta brillante
+	return b.build()
+
+
+## Cambia el objeto que sostiene el personaje (no toca animaciones ni estadísticas: solo el modelo visible).
+static func set_hand_weapon(rig: Rig, id: String) -> void:
+	if rig == null:
+		return
+	var node := rig.props.get("case", null) as Node3D
+	if node == null:
+		return
+	if String(rig.props.get("weapon_id", "")) == id:
+		return
+	var mi := node.get_node_or_null("BriefcaseMesh") as MeshInstance3D
+	if mi == null:
+		return
+	var v := weapon_view(id)
+	mi.mesh = weapon_mesh(id)
+	mi.position = v["hand_pos"]
+	mi.rotation_degrees = v["hand_rot"]
+	rig.props["weapon_id"] = id
 
 
 ## Guante blanco 3D que SEÑALA HACIA ABAJO (índice extendido, resto de dedos y pulgar recogidos, puño con puñeta de color).

@@ -304,8 +304,9 @@ func _spawn_case(i: int, spec: Dictionary, p: Dictionary, dir: Vector3, origin: 
 	c.node = Node3D.new()
 	c.pivot = Node3D.new()
 	c.node.add_child(c.pivot)
-	var mi := Mats.mesh_instance(ModelFactory.briefcase_mesh(), Mats.world_material(), c.pivot)
-	mi.position = Vector3(0, 0.24, 0)
+	var wid := GameState.hand_weapon_id()
+	var mi := Mats.mesh_instance(ModelFactory.weapon_mesh(wid), Mats.world_material(), c.pivot)
+	mi.position = ModelFactory.weapon_view(wid)["proj_pos"]
 	mi.material_override = Mats.world_material()
 	if c.ghost:
 		var gm := StandardMaterial3D.new()

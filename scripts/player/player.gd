@@ -57,6 +57,8 @@ func _ready() -> void:
 	add_child(cs)
 	rig = ModelFactory.build_lawyer()
 	add_child(rig)
+	if not GameState.loadout.is_empty():
+		ModelFactory.set_hand_weapon(rig, GameState.hand_weapon_id())
 	skills = Skills.new()
 	add_child(skills)
 	skills.setup(self)
