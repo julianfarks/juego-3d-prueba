@@ -6,3 +6,7 @@ build/
 .mono/
 android/
 export_credentials.cfg
+
+# Paquete de Windows generado (se publica en la release, no se versiona)
+dist/Windows/
+dist/*.zip

@@ -44,7 +44,11 @@ func defaults() -> Dictionary:
 			"draw_dist": 1,        # distancia de dibujado: 0 corta, 1 media, 2 larga
 			"fx_level": 1,         # efectos: 0 reducidos, 1 normales, 2 completos
 			"render_scale": 0.85,  # escala de renderizado 3D (0.5–1.0)
-			"fps": 60,
+			"fps": 60,              # límite de FPS (en PC 0 = sin límite)
+			"window_mode": 0,       # solo PC: 0 ventana, 1 sin bordes (pantalla completa), 2 pantalla completa exclusiva
+			"resolution": 0,        # solo PC: índice en Config.PC_RESOLUTIONS (tamaño de la ventana)
+			"vsync": 1,             # solo PC: 0 desactivado, 1 activado, 2 adaptativo
+			"pc_init": false,       # solo PC: ya se aplicaron los valores iniciales de escritorio
 			"camera_sens": 1.0,    # antiguo (antes de 0.10): solo se usa para migrar a cam_sens_x/y
 			"cam_dist": 9.6,       # distancia de la cámara al personaje (m)
 			"cam_height": 1.7,     # altura del punto que sigue la cámara (m)

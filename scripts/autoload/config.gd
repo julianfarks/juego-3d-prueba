@@ -69,7 +69,16 @@ const QUALITY := [
 	{"name": "Baja", "msaa": 0, "max_enemies": 18, "shadow_q": 0, "draw_dist": 0, "fx_level": 0, "render_scale": 0.67},
 	{"name": "Media", "msaa": 0, "max_enemies": 28, "shadow_q": 0, "draw_dist": 1, "fx_level": 1, "render_scale": 0.85},
 	{"name": "Alta", "msaa": 1, "max_enemies": 40, "shadow_q": 2, "draw_dist": 2, "fx_level": 2, "render_scale": 1.0},
+	# Solo PC: mismo límite de enemigos que «Alta» (el equilibrio no cambia); sube el suavizado de bordes a 4x.
+	{"name": "Máxima", "msaa": 2, "max_enemies": 40, "shadow_q": 2, "draw_dist": 2, "fx_level": 2, "render_scale": 1.0},
 ]
+## Presets que se ofrecen en la interfaz: en Android solo Baja/Media/Alta; en PC también «Máxima».
+func quality_names() -> Array:
+	var n: Array = []
+	for i in (QUALITY.size() if pc_mode() else QUALITY.size() - 1):
+		n.append(QUALITY[i]["name"])
+	return n
+
 ## Sombras del sol: apagadas / bajas (atlas pequeño, corto alcance) / altas.
 const SHADOW_LEVELS := [
 	{"name": "Apagadas", "on": false, "atlas": 1024, "dist": 30.0, "filter": 0},
@@ -90,6 +99,75 @@ const FX_LEVELS := [
 ]
 const RENDER_SCALES := [0.5, 0.67, 0.85, 1.0]
 const GFX_KEYS := ["shadow_q", "draw_dist", "fx_level", "render_scale"]
+
+# --- Modo PC (Windows) ---------------------------------------------------------
+## El modo PC (teclado + ratón, sin controles táctiles, opciones de pantalla) se activa en Windows y en cualquier
+## compilación con la característica «pcgame» (la lleva el preset de exportación de Windows); nunca en Android.
+## En pruebas de escritorio se fuerza con --pcmode.
+const PC_FPS := [30, 60, 120, 144, 240, 0]
+const PC_RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160)]
+const WINDOW_MODES := ["Ventana", "Sin bordes", "Pantalla completa"]
+const VSYNC_MODES := ["Desactivado", "Activado", "Adaptativo"]
+var _pc_cache := -1
+
+
+func _ready() -> void:
+	# primer arranque en PC: valores iniciales de escritorio (calidad Alta, VSync, sin límite de FPS); después manda el jugador
+	if pc_mode() and not bool(SaveSystem.setting("pc_init")):
+		apply_preset(2)
+		SaveSystem.set_setting("fps", 0)
+		SaveSystem.set_setting("vsync", 1)
+		SaveSystem.set_setting("pc_init", true)
+		SaveSystem.mark_dirty()
+
+
+func pc_mode() -> bool:
+	if _pc_cache < 0:
+		var on := false
+		if not OS.has_feature("android"):
+			on = OS.has_feature("windows") or OS.has_feature("pcgame") or cmd_flag("--pcmode")
+		_pc_cache = 1 if on else 0
+	return _pc_cache == 1
+
+
+## Resoluciones de ventana que caben en la pantalla actual.
+func available_resolutions() -> Array:
+	var out: Array = []
+	var scr := DisplayServer.screen_get_size()
+	for r in PC_RESOLUTIONS:
+		if scr.x <= 0 or (r.x <= scr.x and r.y <= scr.y):
+			out.append(r)
+	if out.is_empty():
+		out.append(PC_RESOLUTIONS[0])
+	return out
+
+
+## Aplica modo de ventana, resolución y VSync (solo PC). Sin pantalla (pruebas headless) no hace nada.
+func apply_display() -> void:
+	if not pc_mode() or DisplayServer.get_name() == "headless":
+		return
+	var wm := clampi(int(SaveSystem.setting("window_mode")), 0, 2)
+	var res_i := clampi(int(SaveSystem.setting("resolution")), 0, PC_RESOLUTIONS.size() - 1)
+	var res: Vector2i = PC_RESOLUTIONS[res_i]
+	match wm:
+		0:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			var scr := DisplayServer.screen_get_size()
+			if scr.x > 0 and (res.x > scr.x or res.y > scr.y):
+				res = Vector2i(mini(res.x, scr.x), mini(res.y, scr.y))
+			DisplayServer.window_set_size(res)
+			DisplayServer.window_set_position(DisplayServer.screen_get_position() + (scr - res) / 2)
+		1:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		2:
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+	var vs := [DisplayServer.VSYNC_DISABLED, DisplayServer.VSYNC_ENABLED, DisplayServer.VSYNC_ADAPTIVE]
+	DisplayServer.window_set_vsync_mode(vs[clampi(int(SaveSystem.setting("vsync")), 0, 2)] as DisplayServer.VSyncMode)
+
 
 # --- Cámara -------------------------------------------------------------------
 ## Límites razonables: nunca atraviesa al personaje, no se aleja tanto que no se vea, ni queda en un ángulo injugable.
@@ -173,6 +251,8 @@ func render_scale() -> float:
 
 ## Límites de FPS que ofrece este dispositivo: 30 y 60 siempre; 90/120 solo si la pantalla llega a esa frecuencia.
 func fps_options() -> Array:
+	if pc_mode():
+		return PC_FPS      # 0 = sin límite
 	var out := [30, 60]
 	var hz := DisplayServer.screen_get_refresh_rate()
 	if hz >= 85.0:
@@ -200,8 +280,16 @@ func preset_matches() -> bool:
 
 
 func reset_graphics() -> void:
-	apply_preset(1)
-	SaveSystem.set_setting("fps", 60)
+	if pc_mode():
+		apply_preset(2)
+		SaveSystem.set_setting("fps", 0)
+		SaveSystem.set_setting("vsync", 1)
+		SaveSystem.set_setting("window_mode", 0)
+		SaveSystem.set_setting("resolution", 0)
+		apply_display()
+	else:
+		apply_preset(1)
+		SaveSystem.set_setting("fps", 60)
 	SaveSystem.set_setting("show_fps", false)
 	SaveSystem.set_setting("reduce_fx", false)
 
@@ -223,7 +311,8 @@ func apply_graphics(viewport: Viewport = null) -> void:
 	if viewport != null:
 		viewport.scaling_3d_scale = render_scale()
 		viewport.msaa_3d = int(q["msaa"]) as Viewport.MSAA
-	Engine.max_fps = clampi(int(SaveSystem.setting("fps")), 15, 240)
+	var fps_v := int(SaveSystem.setting("fps"))
+	Engine.max_fps = 0 if (fps_v == 0 and pc_mode()) else clampi(fps_v, 15, 240)
 	var sc := shadow_cfg()
 	RenderingServer.directional_shadow_atlas_set_size(int(sc["atlas"]), true)
 	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][int(sc["filter"])] as RenderingServer.ShadowQuality)

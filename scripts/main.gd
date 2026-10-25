@@ -29,6 +29,7 @@ var _overlays: Array = []
 var _pause_menu: PauseMenu
 var pad: PadInput
 var pad_nav: PadNav
+var pc_input: PcInput           # solo en modo PC (ratón + cursor)
 var _transitioning := false
 var _end_pending := false
 var _selftest := false
@@ -38,6 +39,7 @@ func _ready() -> void:
 	GameState.main = self
 	get_tree().set_auto_accept_quit(true)
 	DisplayServer.screen_set_keep_on(true)
+	Config.apply_display()
 	Config.dev_mode = bool(SaveSystem.setting("dev_unlocked"))
 	_build_world()
 	_build_ui()
@@ -85,6 +87,14 @@ func _ready() -> void:
 			pdn.name = "PadTest"
 			add_child(pdn)
 			pdn.set("main", self)
+		return
+	if Config.cmd_flag("--pctest"):
+		var pct := load("res://tests/pctest.gd")
+		if pct != null:
+			var pcn: Node = pct.new()
+			pcn.name = "PcTest"
+			add_child(pcn)
+			pcn.set("main", self)
 		return
 	if Config.cmd_flag("--controltest"):
 		var cot := load("res://tests/controltest.gd")
@@ -1126,6 +1136,10 @@ func _build_pad() -> void:
 	pad_nav.name = "PadNav"
 	pad_nav.main = self
 	add_child(pad_nav)
+	if Config.pc_mode():
+		pc_input = PcInput.new()
+		pc_input.main = self
+		add_child(pc_input)
 	pad.mode_changed.connect(_on_pad_mode)
 	pad.bindings_changed.connect(hud.refresh_pad_hints)
 	pad.devices_changed.connect(hud.refresh_pad_hints)
@@ -1134,8 +1148,10 @@ func _build_pad() -> void:
 
 func _on_pad_mode(on: bool) -> void:
 	# con mando: fuera los controles táctiles (joystick y botones) para aprovechar toda la pantalla
-	touch.set_suppressed(on)
+	touch.set_suppressed(on or Config.pc_mode())      # en PC nunca hay controles táctiles
 	hud.refresh_pad_hints()
+	if Config.pc_mode():
+		return
 	if on and state == St.RUN and hud.visible:
 		GameState.toast_msg("Modo mando: controles táctiles ocultos", UIKit.GOOD)
 	elif not on and state == St.RUN and hud.visible:

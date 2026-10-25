@@ -35,7 +35,8 @@ func _ready() -> void:
 	head.add_child(close)
 	var tabs := HBoxContainer.new()
 	v.add_child(tabs)
-	for k in [["touch", "TÁCTIL"], ["pad", "MANDO"], ["keys", "TECLADO"]]:
+	var tab_list := [["keys", "TECLADO Y RATÓN"], ["pad", "MANDO"]] if Config.pc_mode() else [["touch", "TÁCTIL"], ["pad", "MANDO"], ["keys", "TECLADO"]]
+	for k in tab_list:
 		var b := UIKit.button(String(k[1]), Vector2(200, 54), 22)
 		b.toggle_mode = true
 		b.name = "Tab_" + String(k[0])
@@ -52,7 +53,7 @@ func _ready() -> void:
 	if PadInput.inst != null:
 		PadInput.inst.devices_changed.connect(_refresh_status)
 		PadInput.inst.bindings_changed.connect(_refresh_labels)
-	_show_tab("pad" if PadInput.pad_mode else "touch")
+	_show_tab("pad" if PadInput.pad_mode else ("keys" if Config.pc_mode() else "touch"))
 
 
 func _process(delta: float) -> void:
@@ -253,8 +254,10 @@ func _refresh_labels() -> void:
 
 # ------------------------------------------------------------------ TECLADO
 func _build_keys() -> void:
-	_section("Teclado (PC)")
-	_note("En el móvil no hace falta. Pulsa una acción y luego la tecla nueva (Esc cancela). Una tecla solo sirve para una acción.")
+	_section("Teclado y ratón (PC)")
+	if Config.pc_mode():
+		_note("Ratón: mueve la cámara · clic izquierdo = atacar · clic derecho = Documentos. E también interactúa. Los menús liberan el cursor.")
+	_note("Pulsa una acción y luego la tecla nueva (Esc cancela). Una tecla solo sirve para una acción.")
 	for a in PadInput.KEY_ACTIONS:
 		var row := HBoxContainer.new()
 		_body.add_child(row)

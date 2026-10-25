@@ -104,8 +104,25 @@ func _build_audio() -> void:
 
 
 func _build_video() -> void:
+	if Config.pc_mode():
+		_section("Pantalla")
+		_options("Modo de pantalla", "window_mode", Config.WINDOW_MODES, [], func(i):
+			SaveSystem.set_setting("window_mode", i)
+			Config.apply_display(), 190)
+		var rs := Config.available_resolutions()
+		var rnames: Array = []
+		var rvals: Array = []
+		for r in rs:
+			rnames.append("%d×%d" % [r.x, r.y])
+			rvals.append(Config.PC_RESOLUTIONS.find(r))
+		_options("Resolución (ventana)", "resolution", rnames, rvals, func(i):
+			SaveSystem.set_setting("resolution", i)
+			Config.apply_display(), 150)
+		_options("VSync", "vsync", Config.VSYNC_MODES, [], func(i):
+			SaveSystem.set_setting("vsync", i)
+			Config.apply_display(), 190)
 	_section("Calidad gráfica")
-	_options("Calidad", "quality", ["Baja", "Media", "Alta"], [], func(i): Config.apply_preset(i))
+	_options("Calidad", "quality", Config.quality_names(), [], func(i): Config.apply_preset(i))
 	_preset_note = UIKit.label("", 20, UIKit.TEXT_DIM)
 	_preset_note.name = "PresetNote"
 	_vbox.add_child(_preset_note)
@@ -115,10 +132,10 @@ func _build_video() -> void:
 	_options("Efectos", "fx_level", ["Reducidos", "Normales", "Completos"])
 	_options("Escala de renderizado", "render_scale", ["50%", "67%", "85%", "100%"], Config.RENDER_SCALES)
 	var fo := Config.fps_options()
-	_options("Límite de FPS", "fps", fo.map(func(x): return str(x)), fo)
+	_options("Límite de FPS", "fps", fo.map(func(x): return "Sin límite" if int(x) == 0 else str(x)), fo, Callable(), 150 if Config.pc_mode() else 130)
 	_toggle("Mostrar FPS", "show_fps")
 	_toggle("Reducir efectos con muchos impactos", "reduce_fx")
-	_vbox.add_child(UIKit.label("Los cambios se aplican al instante. El límite de FPS real depende de la pantalla del dispositivo.", 18, UIKit.TEXT_DIM))
+	_vbox.add_child(UIKit.label("Los cambios se aplican al instante. En pantalla completa la resolución es la del escritorio (usa la escala de renderizado para ganar rendimiento)." if Config.pc_mode() else "Los cambios se aplican al instante. El límite de FPS real depende de la pantalla del dispositivo.", 18, UIKit.TEXT_DIM))
 	var rb := UIKit.button("Restaurar valores predeterminados", Vector2(520, 60), 22)
 	rb.name = "ResetVideo"
 	rb.pressed.connect(func():
@@ -306,7 +323,7 @@ func _toggle(label: String, key: String) -> void:
 	_vbox.add_child(cb)
 
 
-func _options(label: String, key: String, names: Array, values: Array = [], on_pick: Callable = Callable()) -> void:
+func _options(label: String, key: String, names: Array, values: Array = [], on_pick: Callable = Callable(), btn_w := 130) -> void:
 	var row := HBoxContainer.new()
 	_vbox.add_child(row)
 	var l := UIKit.label(label, 24)
@@ -317,7 +334,7 @@ func _options(label: String, key: String, names: Array, values: Array = [], on_p
 	var getter := func() -> Variant:
 		return Config.render_scale() if key == "render_scale" else SaveSystem.setting(key)
 	for i in names.size():
-		var b := UIKit.button(String(names[i]), Vector2(130, 56), 22)
+		var b := UIKit.button(String(names[i]), Vector2(btn_w, 56), 22)
 		var v: Variant = vals[i]
 		b.name = "Opt_%s_%d" % [key, i]
 		b.toggle_mode = true
