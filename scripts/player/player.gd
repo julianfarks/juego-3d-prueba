@@ -375,6 +375,7 @@ func take_damage(amount: float, from_pos: Vector3, info: Dictionary = {}) -> voi
 		return
 	_since_hurt = 0.0
 	GameState.run_stats["damage_taken"] += dmg
+	GameState.run_stats["hurt"] += 1
 	var shield_before := shield
 	if shield > 0.0:
 		var absorbed := minf(shield, dmg)
@@ -433,6 +434,7 @@ func _die() -> void:
 		return
 	if revives_left > 0:
 		revives_left -= 1
+		GameState.run_stats["revives_free"] += 1
 		hp = max_hp * 0.4
 		iframes = 2.0
 		emit_hp()

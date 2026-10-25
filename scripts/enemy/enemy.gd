@@ -1073,6 +1073,8 @@ func take_damage(dmg: float, info: Dictionary = {}) -> bool:
 	GameState.run_stats["damage_dealt"] += dmg
 	var crit: bool = info.get("crit", false)
 	var src: String = info.get("src", "")
+	if dmg > 0.0:
+		GameState.count_damage_dealt(dmg, src, is_boss)
 	# Número flotante + sonido: mismo evento, mismo valor (sobredaño incluido) que el daño aplicado.
 	Feedback.on_damage(self, dmg, info, hp_before, max_hp, hp <= 0.0)
 	if src != "burn" and dmg > 0.0:

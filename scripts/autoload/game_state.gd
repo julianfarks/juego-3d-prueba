@@ -9,7 +9,7 @@ signal level_up(level: int)
 signal arena_started(index: int, kind: String)
 signal arena_cleared(index: int)
 signal run_started
-signal run_ended(victory: bool)
+signal run_ended
 signal toast(text: String, color: Color)
 signal boss_bar(visible: bool, boss_name: String, hp: float, max_hp: float)
 signal objective_changed(text: String, progress: float)
@@ -95,7 +95,19 @@ func reset_run_stats() -> void:
 		"damage_dealt": 0.0, "damage_taken": 0.0, "crits": 0, "bosses": 0, "cards": 0,
 		"coins_earned": 0, "coins_spent": 0, "best_streak": 0, "elites": 0, "arenas": 0,
 		"highest_hit": 0.0,
+		# --- contadores de la pantalla final (SOLO de la partida en curso; se guardan con ella y se reinician en una nueva) ---
+		"hits": 0,              # impactos a enemigos (take_damage con daño aplicado; sin daño por quemadura)
+		"damage_boss": 0.0,     # daño infligido a jefes (mismo cómputo que damage_dealt)
+		"hurt": 0,              # veces que el jugador recibió daño
+		"dmg_src": {},          # fuente -> daño infligido (para «fuente de daño más usada»)
+		"coins_kill": 0, "coins_boss": 0,    # monedas COBRADAS procedentes de bajas / de jefes (tras bonus de monedas)
+		"purchases": 0,         # compras en la tienda
+		"chests": 0,            # cofres abiertos
+		"boss_rewards": 0,      # botines especiales de jefe elegidos
+		"waves": 0,             # oleadas completadas
+		"revives_free": 0,      # «Segunda Opinión» consumidas
 	}
+	_rec_base = {}
 
 
 func _apply_setup(lo: Dictionary, diff_id: String) -> void:
@@ -115,6 +127,16 @@ func hand_weapon_id() -> String:
 func refresh_hand_weapon() -> void:
 	if player != null and is_instance_valid(player) and player.get("rig") != null:
 		ModelFactory.set_hand_weapon(player.rig, hand_weapon_id())
+
+
+## Récords al empezar la partida: así «nuevo récord» se decide contra lo anterior a ESTA partida, aunque se haya guardado a mitad.
+var _rec_base := {}
+
+
+func _capture_rec_base() -> void:
+	var rec: Dictionary = SaveSystem.data["records"]
+	_rec_base = {"best_arena": int(rec["best_arena"]), "best_kills": int(rec["best_kills"]),
+		"best_time": float(rec["best_time"]), "best_score": int(rec["best_score"])}
 
 
 func _reset_flush() -> void:
@@ -166,6 +188,7 @@ func start_run() -> void:
 	streak_timer = 0.0
 	reset_run_stats()
 	_reset_flush()
+	_capture_rec_base()
 	_apply_setup(LoadoutDB.equipped(), LoadoutDB.selected_difficulty())
 	var perm: Dictionary = SaveSystem.data["meta"]["perm"]
 	build.level = 0
@@ -221,6 +244,7 @@ func snapshot_run(stage: String) -> Dictionary:
 		"run_stats": run_stats.duplicate(true),
 		"flushed": _flushed.duplicate(),
 		"fees_paid": _fees_paid,
+		"rec_base": _rec_base.duplicate(),
 		"shop_purchases": ShopUI.purchases,
 		"perf": ({"result": ar.perf_result, "bonus": ar.bonus_chest_wanted, "bonus_taken": ar.bonus_taken, "main_taken": ar.chest_taken} if ar != null and ar.phase == Arena.Phase.CLEARED else {}),
 		"saved_at": Time.get_unix_time_from_system(),
@@ -252,6 +276,11 @@ func restore_run(r: Dictionary) -> void:
 		if _flushed.has(k):
 			_flushed[k] = fl[k]
 	_fees_paid = int(r.get("fees_paid", 0))
+	var rb: Variant = r.get("rec_base", null)
+	if typeof(rb) == TYPE_DICTIONARY and not (rb as Dictionary).is_empty():
+		_rec_base = (rb as Dictionary).duplicate()
+	else:
+		_capture_rec_base()
 	var lo: Dictionary = r["loadout"]
 	loadout = lo.duplicate()
 	difficulty_id = String(r["difficulty"])
@@ -270,9 +299,9 @@ func score() -> int:
 	return int(kills * 10 + run_stats["arenas"] * 150 + run_stats["bosses"] * 1000 + run_stats["coins_earned"] * 0.5)
 
 
-func fees_for_run(victory: bool) -> int:
+func fees_for_run() -> int:
 	var base := float(run_stats["arenas"]) * 18.0 + float(kills) * 0.6 + float(run_stats["bosses"]) * 90.0
-	return int(round(base * (1.25 if victory else 1.0) * Scaling.diff_x("fee_x")))
+	return int(round(base * Scaling.diff_x("fee_x")))
 
 
 ## Vuelca a las estadísticas permanentes lo ganado desde el último volcado (así los datos se
@@ -302,37 +331,99 @@ func flush_stats() -> void:
 	rec["best_score"] = maxi(int(rec["best_score"]), score())
 
 
-## Cierra la partida: guarda récords, estadísticas y honorarios. Devuelve el resumen.
-func end_run(victory: bool) -> Dictionary:
+## Cierra la partida (solo por muerte o abandono; ya no existe la victoria): guarda récords, estadísticas y honorarios
+## UNA sola vez (in_run lo impide) y devuelve el resumen que muestra la pantalla final.
+func end_run() -> Dictionary:
 	if not in_run:
 		return {}
 	in_run = false
-	var fees := maxi(0, fees_for_run(victory) - _fees_paid)
+	var fees := maxi(0, fees_for_run() - _fees_paid)
 	_fees_paid += fees
+	var d := SaveSystem.data
+	d["meta"]["fees"] += fees
+	flush_stats()
+	d["stats"]["deaths"] += 1
+	d["run"] = {}          # una partida terminada nunca se puede recuperar
+	var rec: Dictionary = d["records"]
+	if _rec_base.is_empty():
+		_capture_rec_base()
+	var base_arena := int(_rec_base["best_arena"])
 	var summary := {
-		"victory": victory,
 		"arena": arena_index + 1,
 		"cycle": Scaling.cycle_of(arena_index) + 1,
 		"kills": kills,
 		"time": run_time,
 		"score": score(),
 		"fees": fees,
-		"stats": run_stats.duplicate(),
+		"stats": run_stats.duplicate(true),
 		"build": build.summary_lines(),
 		"power": build.power_rating(),
 		"difficulty": difficulty_id,
+		"coins_left": coins,
+		"upgrades": build.picks.size(),
+		"synergies": build.active_synergies.size(),
+		"revives": ad_revives_used + int(run_stats["revives_free"]),
+		"ad_revives": ad_revives_used,
+		# récords personales (guardados) y si esta partida los ha batido
+		"best": {"arena": int(rec["best_arena"]), "kills": int(rec["best_kills"]), "time": float(rec["best_time"]), "score": int(rec["best_score"])},
+		"new": {
+			"arena": arena_index + 1 > base_arena,
+			"kills": kills > int(_rec_base["best_kills"]),
+			"time": run_time > float(_rec_base["best_time"]) + 0.01,
+			"score": score() > int(_rec_base["best_score"]),
+		},
+		"unlocked": _newly_available(base_arena, int(rec["best_arena"])),
+		"sources": damage_sources(),
 	}
-	var d := SaveSystem.data
-	d["meta"]["fees"] += fees
-	flush_stats()
-	if victory:
-		d["stats"]["wins"] += 1
-	else:
-		d["stats"]["deaths"] += 1
-	d["run"] = {}          # una partida terminada nunca se puede recuperar
 	SaveSystem.save_now()
-	run_ended.emit(victory)
+	run_ended.emit()
 	return summary
+
+
+## Fuentes de daño agrupadas por categoría legible, de mayor a menor: [[nombre, daño], …]. Datos medidos en Enemy.take_damage.
+func damage_sources() -> Array:
+	var agg := {}
+	var m: Dictionary = run_stats["dmg_src"]
+	for k in m.keys():
+		var lab := src_label(String(k))
+		agg[lab] = float(agg.get(lab, 0.0)) + float(m[k])
+	var out: Array = []
+	for lab in agg.keys():
+		out.append([lab, float(agg[lab])])
+	out.sort_custom(func(a, b): return a[1] > b[1])
+	return out
+
+
+func src_label(src: String) -> String:
+	match src:
+		"case", "case_boom", "return_blast", "boomerang":
+			return String(LoadoutDB.item(String(loadout.get("weapon", "case"))).get("name", "Maletín"))
+		"case_mod":
+			return "Mejoras del maletín"
+		"docs", "docs_boom":
+			return "Documentos Teledirigidos"
+		"zone":
+			return "Sello Mágico"
+		"barrier", "barrier_blast":
+			return "Objeción"
+		"melee", "slam", "charge", "projectile", "hazard", "boss_death", "revive", "other", "":
+			return "Otras fuentes"
+	return "Efectos de mejoras"
+
+
+## Objetos y dificultades cuyo requisito de «mejor arena» se cumplió POR PRIMERA VEZ en esta partida (desbloqueos permanentes
+## que quedan disponibles; comprarlos sigue siendo en el Vestíbulo). Cálculo puro sobre datos reales, sin contar dos veces.
+func _newly_available(base_arena: int, now_arena: int) -> Array:
+	var out: Array = []
+	for id in LoadoutDB.ITEMS.keys():
+		var req := int(LoadoutDB.ITEMS[id]["req_arena"])
+		if req > base_arena and req <= now_arena:
+			out.append(String(LoadoutDB.ITEMS[id]["name"]))
+	for id in LoadoutDB.DIFF_ORDER:
+		var req2 := int(LoadoutDB.DIFFICULTIES[id]["req_arena"])
+		if req2 > base_arena and req2 <= now_arena:
+			out.append("Dificultad: " + String(LoadoutDB.DIFFICULTIES[id]["name"]))
+	return out
 
 
 # --- monedas -----------------------------------------------------------------
@@ -375,6 +466,17 @@ func add_xp(amount: float) -> void:
 		Perks.fire("levelup", {})
 		AudioManager.sfx("levelup")
 		toast.emit("¡Nivel de caso %d!" % (level + 1), Color(1, 0.85, 0.3))
+
+
+## Contadores de daño infligido (los llama Enemy.take_damage: UN evento = UNA cuenta). 'burn' (quemadura continua) no cuenta como golpe.
+func count_damage_dealt(dmg: float, src: String, is_boss: bool) -> void:
+	if src != "burn":
+		run_stats["hits"] += 1
+	if is_boss:
+		run_stats["damage_boss"] += dmg
+	var key := src if src != "" else "other"
+	var m: Dictionary = run_stats["dmg_src"]
+	m[key] = float(m.get(key, 0.0)) + dmg
 
 
 # --- bajas -------------------------------------------------------------------

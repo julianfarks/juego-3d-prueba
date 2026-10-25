@@ -1,5 +1,5 @@
 extends Node
-## Pruebas de la pantalla de DERROTA / VICTORIA (v0.10.3): diseño adaptable, lista de 30 mejoras desplazable,
+## Pruebas de la pantalla FINAL de supervivencia infinita (sin victoria): diseño adaptable, lista de 30 mejoras desplazable,
 ## botones completos (táctil y mando), varias resoluciones horizontales. Render real (xvfb), entrada real.
 ##   xvfb-run -a -s "-screen 0 1280x720x24" godot --path . --rendering-driver opengl3 -- --endtest --out=DIR
 
@@ -7,7 +7,7 @@ var main: Node
 var out_dir := "/tmp/endtest"
 var fails: Array = []
 var passes := 0
-const RES := [Vector2i(1280, 720), Vector2i(960, 540), Vector2i(854, 480), Vector2i(1280, 590), Vector2i(800, 360)]
+const RES := [Vector2i(1280, 720), Vector2i(960, 540), Vector2i(854, 480), Vector2i(1280, 590), Vector2i(800, 360), Vector2i(540, 960), Vector2i(450, 1000)]
 
 
 func _ready() -> void:
@@ -111,9 +111,16 @@ func _types(n: int) -> Array:
 	return out
 
 
-func _summary(victory: bool) -> Dictionary:
-	return {"victory": victory, "arena": 15, "cycle": 3, "kills": 1234, "time": 1807.0, "score": 987654, "fees": 4321,
-		"stats": {"bosses": 3, "damage_dealt": 1234567.0, "highest_hit": 98765.0, "crits": 4321, "best_streak": 321, "coins_earned": 54321, "cards": 30},
+func _summary() -> Dictionary:
+	return {"arena": 15, "cycle": 3, "kills": 1234, "time": 1807.0, "score": 987654, "fees": 4321,
+		"stats": {"bosses": 3, "damage_dealt": 1234567.0, "highest_hit": 98765.0, "crits": 4321, "best_streak": 321, "coins_earned": 54321,
+			"cards": 30, "waves": 40, "damage_boss": 345678.0, "damage_taken": 4567.0, "hits": 9876, "hurt": 55, "coins_spent": 12000,
+			"purchases": 14, "coins_kill": 30000, "coins_boss": 5000, "chests": 15, "boss_rewards": 3},
+		"coins_left": 777, "upgrades": 30, "synergies": 2, "revives": 1, "ad_revives": 1,
+		"best": {"arena": 15, "kills": 1234, "time": 1807.0, "score": 987654},
+		"new": {"arena": true, "kills": false, "time": true, "score": false},
+		"unlocked": ["Mazo del Juez", "Dificultad: Fiscal Implacable"],
+		"sources": [["Maletín Clásico", 900000.0], ["Documentos Teledirigidos", 300000.0]],
 		"build": GameState.build.summary_lines()}
 
 
@@ -147,9 +154,8 @@ func _run() -> void:
 			b.add(ids[i], 0, true)
 	GameState.build_changed.emit()
 	ok(b.type_count() == 30, "E0 la build tiene 30 mejoras diferentes (%d)" % b.type_count())
-	for victory in [false, true]:
-		for r in RES:
-			await _layout_case(victory, r)
+	for r in RES:
+		await _layout_case(false, r)
 	get_window().size = Vector2i(1280, 720)
 	await _secs(0.5)
 	await _interaction_tests()
@@ -160,11 +166,11 @@ func _run() -> void:
 
 
 func _layout_case(victory: bool, res: Vector2i) -> void:
-	var tag := "%s %dx%d" % ["VICTORIA" if victory else "DERROTA", res.x, res.y]
+	var tag := "FIN %dx%d" % [res.x, res.y]
 	get_window().size = res
 	await _secs(0.6)
 	var es := EndScreen.new()
-	es.show_summary(_summary(victory), victory)
+	es.show_summary(_summary())
 	main._ov_root().add_child(es)
 	await _secs(0.4)
 	var vs := get_viewport().get_visible_rect()
@@ -202,11 +208,11 @@ func _layout_case(victory: bool, res: Vector2i) -> void:
 	var bb := (es.find_child("EndButtons", true, false) as Control).get_global_rect()
 	ok(sr.end.y <= fr.position.y + 1.0 and fr.end.y <= bb.position.y + 1.0 and sr.size.y >= 90.0, "L %s: la lista no se superpone con honorarios ni botones (lista %.0f px de alto)" % [tag, sr.size.y])
 	var mx: int = int(es._scroll.get_v_scroll_bar().max_value - es._scroll.get_v_scroll_bar().page)
-	var items := (es.find_child("EndBuild", true, false) as GridContainer).get_child_count()
+	var items := (es.find_child("EndBuild", true, false) as VBoxContainer).get_child_count()
 	ok(items == 30, "L %s: se listan las 30 mejoras con su nivel (%d)" % [tag, items])
 	# textos de las mejoras: ninguno recortado por el ancho (se parten en líneas)
 	var clipped := false
-	for l in (es.find_child("EndBuild", true, false) as GridContainer).get_children():
+	for l in (es.find_child("EndBuild", true, false) as VBoxContainer).get_children():
 		var lb := l as Label
 		if lb.get_minimum_size().x > lb.size.x + 2.0 and lb.autowrap_mode == TextServer.AUTOWRAP_OFF:
 			clipped = true
@@ -216,31 +222,30 @@ func _layout_case(victory: bool, res: Vector2i) -> void:
 		for k in 14:
 			await _swipe_up(Vector2(sr.position.x + sr.size.x * 0.5, sr.position.y + sr.size.y * 0.85), minf(sr.size.y * 0.7, 300.0))
 		await _secs(0.8)
-		var last := (es.find_child("EndBuild", true, false) as GridContainer).get_child(29) as Control
+		var last := (es.find_child("EndBuild", true, false) as VBoxContainer).get_child(29) as Control
 		var lr := last.get_global_rect()
 		ok(es._scroll.scroll_vertical >= mx - 2 and lr.position.y >= sr.position.y - 1.0 and lr.end.y <= sr.end.y + 1.0, "L %s: con el dedo se llega a la última mejora y queda visible (scroll %d/%d)" % [tag, es._scroll.scroll_vertical, mx])
 	else:
 		ok(true, "L %s: todo cabe sin desplazar" % tag)
-	if res == Vector2i(1280, 720) or res == Vector2i(854, 480) or res == Vector2i(800, 360):
+	if res == Vector2i(1280, 720) or res == Vector2i(800, 360) or res.y > res.x:
 		es._scroll.scroll_vertical = 0
 		await _frames(3)
-		await _shot("e_%s_%dx%d" % ["victoria" if victory else "derrota", res.x, res.y])
+		await _shot("e_fin_%dx%d" % [res.x, res.y])
 	es.queue_free()
 	await _frames(3)
 
 
 func _interaction_tests() -> void:
 	# --- derrota real: toque real sobre los botones ---
-	var sm := GameState.end_run(false)
+	var sm := GameState.end_run()
 	ok(not sm.is_empty(), "I0 la derrota genera su resumen")
 	main.state = main.St.ENDED
 	var es := EndScreen.new()
-	es.show_summary(sm, false)
-	var fired := {"retry": 0, "lobby": 0, "settings": 0, "continue": 0}
+	es.show_summary(sm)
+	var fired := {"retry": 0, "lobby": 0, "settings": 0}
 	es.retry_pressed.connect(func(): fired["retry"] += 1)
 	es.lobby_pressed.connect(func(): fired["lobby"] += 1)
 	es.settings_pressed.connect(func(): fired["settings"] += 1)
-	es.continue_pressed.connect(func(): fired["continue"] += 1)
 	main._ov_root().add_child(es)
 	main._overlays.append(es)
 	get_tree().paused = true

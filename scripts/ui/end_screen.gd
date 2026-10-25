@@ -1,31 +1,31 @@
 class_name EndScreen
 extends Control
-## Pantalla de derrota / victoria con resumen de la partida. Diseño ADAPTABLE (v0.10.3):
-##  · el panel se dimensiona a la pantalla visible (márgenes laterales/superior/inferior, ancho máx. 1040) y se recoloca si cambia;
-##  · título, subtítulo, honorarios y botones son FIJOS (siempre visibles); estadísticas y lista de mejoras van en una zona
-##    desplazable (con el dedo o el stick derecho) que ocupa el espacio sobrante;
-##  · los botones están en un contenedor que pasa a otra fila si no caben (nunca se recortan).
+## Pantalla FINAL de la partida (supervivencia infinita): solo aparece al morir sin reanimaciones o al abandonar.
+## No existe victoria ni «continuar»: la partida solo termina cuando el jugador cae. Muestra únicamente datos medidos de
+## verdad (GameState.run_stats + récords guardados). Diseño ADAPTABLE (pantalla vertical de Android incluida):
+##  · cabecera y botones FIJOS; las estadísticas van en una zona desplazable (dedo con TouchScroll, rueda o stick derecho);
+##  · el panel se dimensiona a la pantalla visible y se recoloca si cambia; las filas hacen salto de línea (nada se recorta);
+##  · los botones están en un contenedor que pasa a otra fila si no caben.
 
-signal retry_pressed
+signal retry_pressed          # NUEVA PARTIDA
 signal settings_pressed
-signal continue_pressed
-signal lobby_pressed
+signal lobby_pressed          # VOLVER A LA SALA CENTRAL
 signal revive_pressed
 
 const MAX_W := 1040.0
 var _panel: PanelContainer
 var _scroll: ScrollContainer
+var _touch: TouchScroll
 var _revive_btn: Button
 var _revive_count: Label
 var _revive_msg: Label
 
 
 ## revive: {} = sin opción de reanimar; {"left": n, "max": 2} = muestra «REVIVIR — VER ANUNCIO DE 30 S» y el contador.
-func show_summary(sm: Dictionary, can_continue := false, revive := {}) -> void:
+func show_summary(sm: Dictionary, revive := {}) -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(UIKit.dim_background(0.82))
-	var victory: bool = sm.get("victory", false)
+	add_child(UIKit.dim_background(0.86))
 	_panel = UIKit.panel()
 	_panel.name = "EndPanel"
 	_panel.clip_contents = true
@@ -40,12 +40,16 @@ func show_summary(sm: Dictionary, can_continue := false, revive := {}) -> void:
 	v.add_theme_constant_override("separation", 8)
 	mc.add_child(v)
 	# --- cabecera fija ---
-	var title := UIKit.title("¡CASO GANADO!" if victory else "CASO PERDIDO", 54)
+	var title := UIKit.title("CASO PERDIDO", 52)
 	title.name = "EndTitle"
-	title.add_theme_color_override("font_color", UIKit.GOOD if victory else UIKit.BAD)
+	title.add_theme_color_override("font_color", UIKit.BAD)
 	v.add_child(title)
-	v.add_child(UIKit.label("Arena %d · Ciclo %d" % [sm["arena"], sm["cycle"]], 26, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER))
-	# --- zona desplazable: estadísticas + mejoras ---
+	var sub := UIKit.label("Sobreviviste hasta la Arena %d · Ciclo %d" % [int(sm["arena"]), int(sm["cycle"])], 26, UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	sub.name = "EndSub"
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.custom_minimum_size = Vector2(260, 0)
+	v.add_child(sub)
+	# --- zona desplazable ---
 	_scroll = ScrollContainer.new()
 	_scroll.name = "EndScroll"
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -53,63 +57,85 @@ func show_summary(sm: Dictionary, can_continue := false, revive := {}) -> void:
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.custom_minimum_size = Vector2(0, 110)
 	v.add_child(_scroll)
+	_touch = TouchScroll.new()
+	add_child(_touch)
+	_touch.setup(_scroll, _scroll)
 	var sv := VBoxContainer.new()
 	sv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sv.add_theme_constant_override("separation", 10)
+	sv.add_theme_constant_override("separation", 12)
 	_scroll.add_child(sv)
 	var st: Dictionary = sm["stats"]
-	var grid := GridContainer.new()
-	grid.columns = 4                      # etiqueta | valor | etiqueta | valor: menos altura que una sola columna
-	grid.add_theme_constant_override("h_separation", 22)
-	grid.add_theme_constant_override("v_separation", 6)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sv.add_child(grid)
-	var rows := [
-		["Puntuación", str(sm["score"])], ["Tiempo", UIKit.fmt_time(float(sm["time"]))],
-		["Bajas", str(sm["kills"])], ["Jefes derrotados", str(st["bosses"])],
-		["Daño infligido", str(int(float(st["damage_dealt"])))], ["Golpe más fuerte", str(int(float(st["highest_hit"])))],
-		["Críticos", str(st["crits"])], ["Mejor racha", str(st["best_streak"])],
-		["Monedas ganadas", str(st["coins_earned"])], ["Mejoras elegidas", str(st["cards"])],
-	]
-	for i in rows.size():
-		var r: Array = rows[i]
-		var lb := UIKit.label(String(r[0]), 23, UIKit.TEXT_DIM)
-		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_child(lb)
-		var vl := UIKit.label(String(r[1]), 23, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_RIGHT)
-		vl.name = "EndStat_%d" % i
-		grid.add_child(vl)
+	var nw: Dictionary = sm["new"]
+	var best: Dictionary = sm["best"]
+	var srcs: Array = sm.get("sources", [])
+	var top := "—"
+	if not srcs.is_empty():
+		var tot := 0.0
+		for e in srcs:
+			tot += float(e[1])
+		top = "%s (%d%%)" % [String(srcs[0][0]), int(round(100.0 * float(srcs[0][1]) / maxf(tot, 1.0)))]
+	var unl: Array = sm.get("unlocked", [])
+	_section(sv, "RESUMEN DE LA PARTIDA", [
+		["time", "Tiempo de supervivencia", UIKit.fmt_time(float(sm["time"])), _rec(nw["time"], UIKit.fmt_time(float(best["time"])))],
+		["arena", "Arena alcanzada", str(int(sm["arena"])), _rec(nw["arena"], str(int(best["arena"])))],
+		["waves", "Oleadas completadas", Feedback.fmt(float(st["waves"])), ""],
+		["bosses", "Jefes derrotados", Feedback.fmt(float(st["bosses"])), ""],
+		["kills", "Enemigos eliminados", Feedback.fmt(float(sm["kills"])), _rec(nw["kills"], Feedback.fmt(float(best["kills"])))],
+		["score", "Puntuación", Feedback.fmt(float(sm["score"])), _rec(nw["score"], Feedback.fmt(float(best["score"])))],
+	])
+	_section(sv, "COMBATE", [
+		["dmg", "Daño infligido", Feedback.fmt(float(st["damage_dealt"])), ""],
+		["dmg_boss", "Daño a jefes y capataces", Feedback.fmt(float(st["damage_boss"])), ""],
+		["taken", "Daño recibido", Feedback.fmt(float(st["damage_taken"])), ""],
+		["hits", "Impactos a enemigos", Feedback.fmt(float(st["hits"])), ""],
+		["hurt", "Veces que te hirieron", Feedback.fmt(float(st["hurt"])), ""],
+		["highest", "Golpe más fuerte", Feedback.fmt(float(st["highest_hit"])), ""],
+		["crits", "Golpes críticos", Feedback.fmt(float(st["crits"])), ""],
+		["top_src", "Mayor fuente de daño", top, ""],
+	])
+	_section(sv, "ECONOMÍA", [
+		["earned", "Monedas obtenidas", Feedback.fmt(float(st["coins_earned"])), ""],
+		["spent", "Gastadas en la tienda", Feedback.fmt(float(st["coins_spent"])), ""],
+		["purchases", "Compras realizadas", Feedback.fmt(float(st["purchases"])), ""],
+		["coins_kill", "Cobradas de enemigos", Feedback.fmt(float(st["coins_kill"])), ""],
+		["coins_boss", "Cobradas de jefes", Feedback.fmt(float(st["coins_boss"])), ""],
+		["coins_left", "Monedas al morir", Feedback.fmt(float(sm["coins_left"])), ""],
+		["fees", "Honorarios cobrados", "+" + Feedback.fmt(float(sm["fees"])), ""],
+	])
+	_section(sv, "PROGRESIÓN Y RECOMPENSAS", [
+		["upgrades", "Mejoras obtenidas", Feedback.fmt(float(sm["upgrades"])), ""],
+		["synergies", "Sinergias activas", Feedback.fmt(float(sm["synergies"])), ""],
+		["chests", "Cofres abiertos", Feedback.fmt(float(st["chests"])), ""],
+		["boss_rewards", "Botines de jefe elegidos", Feedback.fmt(float(st["boss_rewards"])), ""],
+		["revives", "Reanimaciones usadas", Feedback.fmt(float(sm["revives"])), ""],
+		["unlocked", "Desbloqueos nuevos disponibles", "Ninguno" if unl.is_empty() else ", ".join(PackedStringArray(unl)), ""],
+	])
 	var bl: Array = sm["build"]
 	if not bl.is_empty():
-		UIKit.hsep(sv)
-		sv.add_child(UIKit.label("MEJORAS DE LA BUILD (%d)" % bl.size(), 24, UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
-		var items := GridContainer.new()
+		var items := VBoxContainer.new()
 		items.name = "EndBuild"
-		items.columns = 2
-		items.add_theme_constant_override("h_separation", 24)
-		items.add_theme_constant_override("v_separation", 4)
-		items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sv.add_child(items)
+		items.add_theme_constant_override("separation", 4)
 		for line in bl:
 			var l := UIKit.label(String(line), 21, UIKit.TEXT)
 			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size = Vector2(200, 0)
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			l.custom_minimum_size = Vector2(120, 0)
 			items.add_child(l)
-	# --- pie fijo: honorarios + botones ---
+		_card(sv, "MEJORAS DE LA BUILD (%d)" % bl.size(), items)
+	# --- pie fijo: botones ---
 	UIKit.hsep(v)
-	var fees := UIKit.label("Honorarios cobrados: +%d" % int(sm["fees"]), 30, Color(0.6, 1.0, 0.7), HORIZONTAL_ALIGNMENT_CENTER)
+	var fees := UIKit.label("Honorarios cobrados: +%d" % int(sm["fees"]), 28, Color(0.6, 1.0, 0.7), HORIZONTAL_ALIGNMENT_CENTER)
 	fees.name = "EndFees"
 	v.add_child(fees)
-	if not revive.is_empty() and not victory:
-		_revive_btn = UIKit.accent_button("REVIVIR — VER ANUNCIO DE 30 S", Vector2(520, 70), 26)
+	if not revive.is_empty():
+		_revive_btn = UIKit.accent_button("REVIVIR — VER ANUNCIO DE 30 S", Vector2(440, 66), 24)
 		_revive_btn.name = "End_revive"
 		_revive_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_revive_btn.pressed.connect(func(): revive_pressed.emit())
 		var rb := CenterContainer.new()
 		rb.add_child(_revive_btn)
 		v.add_child(rb)
-		_revive_count = UIKit.label("", 24, UIKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		_revive_count = UIKit.label("", 22, UIKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 		_revive_count.name = "End_reviveCount"
 		v.add_child(_revive_count)
 		_revive_msg = UIKit.label("", 22, UIKit.BAD, HORIZONTAL_ALIGNMENT_CENTER)
@@ -125,18 +151,11 @@ func show_summary(sm: Dictionary, can_continue := false, revive := {}) -> void:
 	row.add_theme_constant_override("h_separation", 14)
 	row.add_theme_constant_override("v_separation", 10)
 	v.add_child(row)
-	if can_continue:
-		var cont := UIKit.accent_button("CONTINUAR EN MODO INFINITO", Vector2(380, 64), 22)
-		cont.name = "End_continue"
-		cont.pressed.connect(func(): continue_pressed.emit())
-		row.add_child(cont)
-	else:
-		var retry := UIKit.accent_button("Reintentar", Vector2(300, 64), 26)
-		retry.name = "End_retry"
-		retry.pressed.connect(func(): retry_pressed.emit())
-		row.add_child(retry)
-	# ya no existe un menú principal: el destino coherente tras una partida es el Vestíbulo del Bufete
-	var lob := UIKit.button("RECLAMAR VICTORIA" if victory else "VOLVER AL VESTÍBULO", Vector2(300, 64), 22)
+	var retry := UIKit.accent_button("NUEVA PARTIDA", Vector2(300, 64), 26)
+	retry.name = "End_retry"
+	retry.pressed.connect(func(): retry_pressed.emit())
+	row.add_child(retry)
+	var lob := UIKit.button("VOLVER A LA SALA CENTRAL", Vector2(360, 64), 22)
 	lob.name = "End_lobby"
 	lob.pressed.connect(func(): lobby_pressed.emit())
 	row.add_child(lob)
@@ -144,6 +163,55 @@ func show_summary(sm: Dictionary, can_continue := false, revive := {}) -> void:
 	sbtn.name = "End_settings"
 	sbtn.pressed.connect(func(): settings_pressed.emit())
 	row.add_child(sbtn)
+
+
+## «★ NUEVO RÉCORD» si esta partida batió el récord guardado; si no, el récord personal vigente.
+func _rec(is_new: bool, best_txt: String) -> String:
+	return "★ NUEVO RÉCORD" if is_new else "Récord: " + best_txt
+
+
+## Tarjeta con título (estilo del juego) alrededor de 'body'.
+func _card(parent: Control, title_text: String, body: Control) -> void:
+	var pc := PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.add_theme_stylebox_override("panel", UIKit.style(Color(0.15, 0.17, 0.25, 0.95), Color(0.75, 0.52, 0.08, 0.8), 12, 2, 12))
+	parent.add_child(pc)
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 6)
+	pc.add_child(cv)
+	cv.add_child(UIKit.label(title_text, 24, UIKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+	cv.add_child(body)
+
+
+## Sección de filas [clave, etiqueta, valor, nota]. Cada valor es un Label «EndStat_<clave>» (las pruebas lo leen).
+func _section(parent: Control, title_text: String, rows: Array) -> void:
+	var g := GridContainer.new()
+	g.columns = 2
+	g.add_theme_constant_override("h_separation", 16)
+	g.add_theme_constant_override("v_separation", 5)
+	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for r in rows:
+		var lb := UIKit.label(String(r[1]), 22, UIKit.TEXT_DIM)
+		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lb.custom_minimum_size = Vector2(150, 0)
+		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		g.add_child(lb)
+		var box := VBoxContainer.new()
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_theme_constant_override("separation", 0)
+		var vl := UIKit.label(String(r[2]), 23, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_RIGHT)
+		vl.name = "EndStat_" + String(r[0])
+		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vl.custom_minimum_size = Vector2(120, 0)
+		vl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_child(vl)
+		if String(r[3]) != "":
+			var note := UIKit.label(String(r[3]), 18, UIKit.ACCENT if String(r[3]).begins_with("★") else UIKit.TEXT_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+			note.name = "EndNote_" + String(r[0])
+			note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			box.add_child(note)
+		g.add_child(box)
+	_card(parent, title_text, g)
 
 
 ## Actualiza botón y contador (n/máx). Sin reanimaciones: botón desactivado con «SIN REANIMACIONES DISPONIBLES».

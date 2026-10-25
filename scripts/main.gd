@@ -30,7 +30,6 @@ var _pause_menu: PauseMenu
 var pad: PadInput
 var pad_nav: PadNav
 var _transitioning := false
-var _victory_shown := false
 var _end_pending := false
 var _selftest := false
 
@@ -189,6 +188,13 @@ func _ready() -> void:
 			enn.name = "EndTest"
 			add_child(enn)
 			enn.set("main", self)
+	if Config.cmd_flag("--infinitetest"):
+		var int_t := load("res://tests/infinitetest.gd")
+		if int_t != null:
+			var inn: Node = int_t.new()
+			inn.name = "InfiniteTest"
+			add_child(inn)
+			inn.set("main", self)
 	if Config.cmd_flag("--shopcoltest"):
 		var sct := load("res://tests/shopcoltest.gd")
 		if sct != null:
@@ -620,7 +626,6 @@ func _go_to_run(resume: Dictionary) -> void:
 func _start_run(resume: Dictionary = {}) -> void:
 	var restoring := not resume.is_empty()
 	ShopUI.purchases = int(resume.get("shop_purchases", 0)) if restoring else 0
-	_victory_shown = false
 	_end_pending = false
 	if restoring:
 		GameState.restore_run(resume)
@@ -821,11 +826,13 @@ func _pay_advance_fee(idx: int) -> void:
 
 
 func _on_chest_opened(min_rarity: int) -> void:
+	GameState.run_stats["chests"] += 1
 	await get_tree().create_timer(0.5, true, false, true).timeout
 	_start_reward(min_rarity, arena.kind == Scaling.KIND_BOSS)
 
 
 func _on_bonus_chest_opened(min_rarity: int) -> void:
+	GameState.run_stats["chests"] += 1
 	await get_tree().create_timer(0.5, true, false, true).timeout
 	_start_reward(min_rarity, false)
 
@@ -852,6 +859,7 @@ func _boss_special_pick(min_rarity: int) -> void:
 		return
 	var cs := CardSelect.new()
 	cs.picked.connect(func(card):
+		GameState.run_stats["boss_rewards"] += 1
 		seen.append(String(card["id"]))
 		for c2 in cards:
 			if not seen.has(String(c2["id"])):
@@ -897,10 +905,7 @@ func _on_shop() -> void:
 func _on_portal() -> void:
 	if _transitioning:
 		return
-	if arena.kind == Scaling.KIND_BOSS and int(GameState.run_stats["bosses"]) >= 2 and not _victory_shown:
-		_victory_shown = true
-		_end_run(true, true)
-		return
+	# SUPERVIVENCIA INFINITA: no existe una última arena ni un último jefe; tras cada portal viene siempre la siguiente fase.
 	_begin_arena(GameState.arena_index + 1)
 
 
@@ -915,22 +920,21 @@ func _on_player_died() -> void:
 	Engine.time_scale = 0.35
 	await get_tree().create_timer(1.6, true, false, true).timeout
 	Engine.time_scale = 1.0
-	_end_run(false, false)
+	_end_run(true)
 
 
-func _end_run(victory: bool, can_continue: bool) -> void:
-	var sm := GameState.end_run(victory)
+## Fin de partida: SOLO por muerte (sin reanimaciones) o por abandonar desde el menú de pausa. Nunca por «ganar».
+## 'revive_ok' = se ofrece reanimar con anuncio (no al abandonar).
+func _end_run(revive_ok := true) -> void:
+	var sm := GameState.end_run()
 	if sm.is_empty():
 		return
-	if can_continue:
-		# la victoria permite seguir: reabrimos la partida tras mostrar el resumen
-		pass
 	state = St.ENDED
 	touch.release_all()
 	get_tree().paused = true
 	var es := EndScreen.new()
-	es.show_summary(sm, can_continue, {} if victory else {"left": GameState.ad_revives_left(), "max": GameState.MAX_AD_REVIVES})
-	if not victory:
+	es.show_summary(sm, {"left": GameState.ad_revives_left(), "max": GameState.MAX_AD_REVIVES} if revive_ok else {})
+	if revive_ok:
 		_defeat_sm = sm
 		_defeat_es = es
 		es.revive_pressed.connect(_on_revive_pressed)
@@ -944,16 +948,10 @@ func _end_run(victory: bool, can_continue: bool) -> void:
 		es.queue_free()
 		get_tree().paused = false
 		_enter_lobby())
-	es.continue_pressed.connect(func():
-		es.queue_free()
-		_continue_after_victory())
 	_ov_root().add_child(es)
 	_overlays.append(es)
 	es.tree_exited.connect(func(): _overlays.erase(es))
-	if victory:
-		AudioManager.sfx("victory")
-	else:
-		AudioManager.sfx("defeat")
+	AudioManager.sfx("defeat")
 
 
 # ------------------------------------------------------------------ reanimación con anuncio recompensado
@@ -1028,14 +1026,6 @@ func _restart_from_end() -> void:
 	_start_run()
 
 
-func _continue_after_victory() -> void:
-	# sigue la partida (modo infinito): se reabre el run sin perder el build
-	GameState.in_run = true
-	state = St.RUN
-	get_tree().paused = false
-	_begin_arena(GameState.arena_index + 1)
-
-
 func _back_to_lobby() -> void:
 	get_tree().paused = false
 	await _enter_lobby()
@@ -1065,7 +1055,7 @@ func _toggle_pause() -> void:
 	_pause_menu.leave_save_pressed.connect(_save_and_leave)
 	_pause_menu.abandon_pressed.connect(func():
 		_resume()
-		_end_run(false, false))
+		_end_run(false))
 	_pause_menu.records_pressed.connect(func(): _open_overlay(StatsPanel.new()))
 	_pause_menu.meta_pressed.connect(func():
 		var m := MetaScreen.new()

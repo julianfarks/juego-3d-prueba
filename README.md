@@ -23,7 +23,7 @@ de los roguelikes de arenas (cofres, cartas, builds), pero con contenido 100 % o
 ## Flujo
 Arena de eliminación → supervivencia → desafío (minijefe) → élite → jefe de zona. Cada arena completada da un cofre
 (cartas) y un portal; algunas tienen tienda. Tras el jefe empieza un ciclo claramente más difícil (escalado centralizado
-en `scripts/core/scaling.gd`). Tras vencer 2 jefes aparece la pantalla de victoria (se puede continuar).
+en `scripts/core/scaling.gd`). **Supervivencia infinita (0.14.0):** no hay victoria ni última arena: la partida solo termina al morir.
 
 ## Estructura
 Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy).
@@ -35,6 +35,13 @@ Ver `docs/ARQUITECTURA.md`. Regenerar audio: `python3 tools/gen_audio.py` (numpy
 
 ## Modo desarrollador
 Ajustes → **CÓDIGOS** → escribir el código de desarrollador → aparece el menú **DESARROLLADOR** en Ajustes (se recuerda entre sesiones; se puede ocultar). Permite sumar dinero y honorarios (botones o cantidad libre), agregar cualquier mejora con rareza y cantidad (respetando sus máximos), modo Dios, saltar de arena y depuración. El código se guarda solo como hash SHA-256.
+
+## Novedades 0.14.0 — supervivencia infinita y pantalla de estadísticas
+- **Sin victoria final**: desaparecen «CASO GANADO», «CONTINUAR EN MODO INFINITO» y «RECLAMAR VICTORIA». Tras cada jefe el portal lleva siempre a la siguiente arena; se conservan cofres, botín especial de jefe, tienda, mejoras y reanimaciones.
+- **Dificultad infinita pero acotada** (`Scaling`/`Config.SCALING`): hasta la arena 60 la curva es la de siempre; después la parte exponencial se congela y vida/daño siguen subiendo de forma lineal, con techos numéricos (`hp_cap`, `dmg_cap`), máx. 6 élites y el tope de enemigos simultáneos de cada calidad gráfica.
+- **Pantalla final** (`end_screen.gd`): Resumen, Combate, Economía y Progresión con scroll táctil; solo cifras medidas (`GameState.run_stats`: impactos, daño a jefes, veces herido, daño por fuente, compras, cofres, botines de jefe, oleadas, monedas por origen, reanimaciones). Marca «★ NUEVO RÉCORD» frente a los récords anteriores a la partida y lista los desbloqueos que han quedado disponibles. Botones: NUEVA PARTIDA y VOLVER A LA SALA CENTRAL.
+- Los contadores de la sesión se guardan con la partida y se reinician al empezar otra; las estadísticas históricas y los récords no se tocan.
+- Prueba: `--infinitetest` (fase 1) y `--infinitetest --phase=2` en un proceso nuevo (récords y desbloqueos tras reiniciar); `--endtest` ampliado con pantallas verticales.
 
 ## Novedades 0.13.1 — cofre desplazable y herramienta en la mano
 

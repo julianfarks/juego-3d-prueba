@@ -257,6 +257,8 @@ func _next_wave() -> void:
 	if bool(_plan["stream"]):
 		_wave_i = 0
 		return
+	if _wave_i >= 0 and _wave_i < waves.size() - 1:
+		GameState.run_stats["waves"] += 1      # se pasa a la siguiente: la anterior cuenta como completada
 	_wave_i += 1
 	_wave_t = 0.0
 	if _wave_i >= waves.size():
@@ -392,8 +394,9 @@ func _on_enemy_died(e: Enemy) -> void:
 	var cv := maxi(1, int(round(float(e.coin_value) * LawPerks.kill_coin_mult(e))))
 	var n := mini(cv, 7)
 	var each := maxi(1, int(round(float(cv) / float(n))))
+	var boss_coin: bool = e.is_boss
 	for i in n:
-		_drop_coin(e.global_position + Vector3(0, 0.8, 0), each)
+		_drop_coin(e.global_position + Vector3(0, 0.8, 0), each, boss_coin)
 	if e == _boss_ref and kind == Scaling.KIND_BOSS:
 		_boss_dead_t = 1.2
 		LawPerks.on_boss_defeated()
@@ -425,10 +428,12 @@ func kill_all() -> void:
 
 
 # ------------------------------------------------------------------ monedas
-func _drop_coin(pos: Vector3, value: int) -> void:
+func _drop_coin(pos: Vector3, value: int, from_boss := false) -> void:
 	if _coins.size() > 120:
-		# demasiadas: fusiona el valor en la moneda más antigua
+		# demasiadas: fusiona el valor en la moneda más antigua (conservando de dónde venía cada parte)
 		_coins[0]["value"] += value
+		if from_boss:
+			_coins[0]["bv"] += value
 		return
 	if _coin_mat == null:
 		_coin_mat = Mats.world_material()
@@ -442,7 +447,7 @@ func _drop_coin(pos: Vector3, value: int) -> void:
 	node.global_position = pos
 	var a := rng.randf() * TAU
 	var vel := Vector3(cos(a) * rng.randf_range(1.5, 3.5), rng.randf_range(4.0, 6.5), sin(a) * rng.randf_range(1.5, 3.5))
-	_coins.append({"node": node, "pos": pos, "vel": vel, "value": value, "t": 0.0})
+	_coins.append({"node": node, "pos": pos, "vel": vel, "value": value, "bv": value if from_boss else 0, "t": 0.0})
 
 
 func _update_coins(delta: float) -> void:
@@ -468,6 +473,11 @@ func _update_coins(delta: float) -> void:
 			vel = vel.lerp(dir.normalized() * (14.0 + c["t"] * 2.0), clampf(delta * 9.0, 0.0, 1.0))
 			if d < 1.0:
 				var got := GameState.add_coins(int(c["value"]))
+				# origen del cobro: todas estas monedas vienen de bajas; la parte de jefes se separa proporcionalmente
+				var cval := maxi(1, int(c["value"]))
+				var from_b := int(round(float(got) * float(c["bv"]) / float(cval)))
+				GameState.run_stats["coins_boss"] += from_b
+				GameState.run_stats["coins_kill"] += got - from_b
 				if _coin_sfx_t <= 0.0:
 					AudioManager.sfx("coin", -6.0)
 					_coin_sfx_t = 0.05
@@ -537,6 +547,7 @@ func _update_hazards(delta: float) -> void:
 func _complete() -> void:
 	phase = Phase.CLEARED
 	GameState.run_stats["arenas"] += 1
+	GameState.run_stats["waves"] += 1          # la última oleada (o el flujo de supervivencia) de la arena
 	GameState.objective_changed.emit("¡Arena completada!", 1.0)
 	GameState.arena_cleared.emit(index)
 	AudioManager.sfx("victory", -4.0)

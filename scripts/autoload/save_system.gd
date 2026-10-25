@@ -96,7 +96,7 @@ func defaults() -> Dictionary:
 		},
 		"stats": {
 			"runs": 0,
-			"wins": 0,             # runs completadas (victoria)
+			"wins": 0,             # (obsoleto: ya no hay victoria; se conserva por compatibilidad con partidas guardadas)
 			"kills": 0,
 			"deaths": 0,
 			"bosses": 0,

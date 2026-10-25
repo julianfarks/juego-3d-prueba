@@ -19,9 +19,8 @@ static func rows() -> Array:
 	var r: Dictionary = SaveSystem.data["records"]
 	var s: Dictionary = SaveSystem.data["stats"]
 	return [
-		["Runs completadas", str(int(s["wins"]))],
 		["Partidas jugadas", str(int(s["runs"]))],
-		["Derrotas", str(int(s["deaths"]))],
+		["Partidas terminadas (muertes)", str(int(s["deaths"]))],
 		["Enemigos derrotados", str(int(s["kills"]))],
 		["Jefes derrotados", str(int(s["bosses"]))],
 		["Mejor progreso", "Arena %d · Ciclo %d" % [int(r["best_arena"]), int(r["best_cycle"])]],

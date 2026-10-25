@@ -129,7 +129,7 @@ func _phase_b() -> void:
 	ok(LoadoutDB.selected_difficulty() == "partner", "B17 la dificultad elegida persiste")
 	ok(int(SaveSystem.data["meta"]["fees"]) == 860, "B18 los honorarios persisten")
 	# una partida terminada no se recupera
-	var sm := GameState.end_run(false)
+	var sm := GameState.end_run()
 	ok(not sm.is_empty(), "B19 la partida termina (derrota)")
 	ok(not SaveSystem.has_valid_run(), "B20 tras perder, no hay partida recuperable")
 	ok(int(SaveSystem.data["stats"]["deaths"]) == 1, "B21 la derrota queda en las estadísticas")

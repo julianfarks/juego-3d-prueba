@@ -383,6 +383,7 @@ func _buy(i: int) -> void:
 			GameState.run_stats["cards"] += 1
 			GameState.build_changed.emit()
 	purchases += 1
+	GameState.run_stats["purchases"] += 1
 	if not bool(o.get("repeat", false)):
 		o["sold"] = true
 	AudioManager.sfx("buy")
