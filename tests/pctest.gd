@@ -300,11 +300,11 @@ func _t8_fps_independence() -> void:
 		player.velocity = Vector3.ZERO
 		await _secs(0.5)
 		var p0: Vector3 = player.global_position
-		var t0 := Time.get_ticks_msec()
+		var f0 := Engine.get_physics_frames()
 		await _key(KEY_D, true)
 		await _secs(1.0)
 		await _key(KEY_D, false)
-		var dt := float(Time.get_ticks_msec() - t0) / 1000.0
+		var dt := float(Engine.get_physics_frames() - f0) / float(Engine.physics_ticks_per_second)      # tiempo de JUEGO (el render por software puede ir más lento que el tiempo real)
 		res[cap] = player.global_position.distance_to(p0) / dt
 	print("[INFO] velocidad lateral con 30 FPS: %.2f m/s, con 144 FPS: %.2f m/s" % [res[30], res[144]])
 	ok(res[30] > 3.0 and res[144] > 3.0, "P8.0 el personaje se desplaza a velocidad normal (>3 m/s)")
